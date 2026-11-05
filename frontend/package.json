@@ -7,6 +7,9 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "oxlint",
+    "test": "node --test",
+    "format": "pnpm dlx prettier@3.9.10 --write src test vite.config.js",
+    "format:check": "pnpm dlx prettier@3.9.10 --check src test vite.config.js",
     "preview": "vite preview"
   },
   "dependencies": {

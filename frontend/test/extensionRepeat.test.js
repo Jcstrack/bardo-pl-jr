@@ -11,8 +11,13 @@ function controllerAt(position) {
     duration: 10,
     paused: false,
     ended: false,
-    play() { this.paused = false; return Promise.resolve(); },
-    pause() { this.paused = true; },
+    play() {
+      this.paused = false;
+      return Promise.resolve();
+    },
+    pause() {
+      this.paused = true;
+    },
   };
   let command;
   let tick;
@@ -22,16 +27,27 @@ function controllerAt(position) {
   };
   const chrome = {
     runtime: {
-      onMessage: { addListener(listener) { command = listener; } },
-      sendMessage() { return Promise.resolve(); },
+      onMessage: {
+        addListener(listener) {
+          command = listener;
+        },
+      },
+      sendMessage() {
+        return Promise.resolve();
+      },
     },
   };
   runInNewContext(source, {
-    window: {}, document, chrome,
+    window: {},
+    document,
+    chrome,
     location: { href: 'https://example.com/song', hostname: 'example.com' },
-    setInterval(callback) { tick = callback; },
+    setInterval(callback) {
+      tick = callback;
+    },
   });
-  const send = (name, value) => command({ type: 'BARDO_COMMAND', command: name, value }, null, () => {});
+  const send = (name, value) =>
+    command({ type: 'BARDO_COMMAND', command: name, value }, null, () => {});
   return { audio, send, tick: () => tick() };
 }
 

@@ -2,13 +2,27 @@
 
 ## Estructura de `src`
 
-- `App.jsx`: coordina reproducción, biblioteca, captura y ventana flotante.
-- `components/player/`: controles, barra de tiempo, lista, álbumes, formularios y menús del reproductor.
-- `components/media/`: adaptadores de YouTube y Spotify.
-- `components/layout/` y `components/ui/`: cabecera e iconos/avisos compartidos.
-- `hooks/`: consulta del estado del bot.
-- `lib/`: enlaces, almacenamiento y funciones de tiempo.
-- `styles/`: estilos base y del reproductor.
+```text
+src/
+├── app/                 # App, cabecera y composición de servicios
+├── features/
+│   ├── player/          # Ventana, controles, barra, marcadores y funciones de tiempo
+│   ├── library/         # Álbumes, canciones, búsqueda, persistencia y API compartida
+│   ├── media/           # YouTube, Spotify, fuentes y control de pestañas
+│   └── discord/         # Conexión del bot, captura y sincronización de tiempo
+├── components/ui/       # Iconos, avisos y modal compartido
+├── styles/              # Estilos globales y diseño adaptable
+└── main.jsx             # Entrada de React
+```
+
+Cada función de `features/` reúne sus componentes, hooks, lógica y pruebas. `app/App.jsx` coordina el estado entre ellas. El proyecto sigue en JavaScript y JSX; el cambio de carpetas no convierte archivos a TypeScript.
+
+Para aplicar o verificar el formato de JS, JSX y CSS con la versión fijada de Prettier:
+
+```powershell
+pnpm --dir frontend format
+pnpm --dir frontend format:check
+```
 
 Ejemplo de reproductor de audio hecho con React y Vite. La primera vez solo aparece el botón de nota musical. Este abre una tarjeta adaptable y arrastrable con álbumes, lista, progreso, anterior/siguiente, pausa y repetición. El volumen aparece solo al pulsar su botón. Al volver, se recuerda si la tarjeta estaba cerrada, minimizada, flotante o maximizada.
 
