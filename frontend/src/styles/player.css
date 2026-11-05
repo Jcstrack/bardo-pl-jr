@@ -577,7 +577,9 @@
   min-height: 34px;
   margin-top: 12px;
 }
-.player-expanded .youtube-source-actions { margin-bottom: 22px; }
+.player-expanded .youtube-source-actions { min-height: 30px; margin-top: 6px; margin-bottom: 4px; }
+.player-expanded .youtube-video-toggle { width: 30px; height: 30px; }
+.player-expanded .youtube-open { min-height: 30px; }
 .player-expanded .youtube-source-actions:has(+ .youtube-frame--inline) { margin-bottom: 0; }
 .player-maximized .youtube-video-toggle {
   width: auto;
@@ -802,8 +804,11 @@ input[type="range"]:disabled {
 .volume-popover {
   position: fixed;
   z-index: 40;
-  width: 146px;
-  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 176px;
+  padding: 7px 10px;
   border: 1px solid #4a4654;
   border-radius: 9px;
   background: #282934;
@@ -811,7 +816,11 @@ input[type="range"]:disabled {
 }
 .volume-popover input {
   display: block;
+  flex: 1;
+  min-width: 0;
 }
+.volume-mute { display: grid; place-items: center; flex: none; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: #d9c6f5; cursor: pointer; }
+.volume-mute:hover, .volume-mute[aria-pressed="true"] { background: #4d3b61; }
 .album-toolbar {
   display: grid;
   gap: 7px;
@@ -968,6 +977,12 @@ input[type="range"]:disabled {
   opacity: 0.4;
   cursor: not-allowed;
 }
+.album-more { position: relative; flex: none; }
+.album-actions .album-more-toggle { display: grid; place-items: center; height: 34px; padding: 0; }
+.album-actions .album-more-toggle[aria-expanded="true"] { border-color: #b49ae6; background: #40344e; }
+.album-more-menu { position: absolute; z-index: 36; top: calc(100% + 7px); right: 0; width: 190px; padding: 5px; border: 1px solid #6f5b87; border-radius: 10px; background: #292834; box-shadow: 0 16px 38px #000a; }
+.album-actions .album-more-menu button { display: flex; align-items: center; gap: 9px; width: 100%; min-height: 38px; padding: 8px; border: 0; border-radius: 7px; background: transparent; color: #f0eaf7; font: inherit; font-size: 11px; text-align: left; }
+.album-actions .album-more-menu button:hover:not(:disabled), .album-actions .album-more-menu button:focus-visible { background: #50415e; }
 .playlist-header {
   display: flex;
   align-items: end;
@@ -1023,7 +1038,7 @@ input[type="range"]:disabled {
 .playlist {
   display: grid;
   gap: 5px;
-  max-height: min(207px, 28svh);
+  max-height: min(265px, 35svh);
   margin-top: 11px;
   overflow-y: auto;
   padding-right: 2px;
@@ -1407,6 +1422,30 @@ input[type="range"]:disabled {
   padding: clamp(19px, 3vw, 27px);
   border-radius: 17px;
 }
+.add-modal--album-manager { width: min(720px, 100%); padding: clamp(18px, 3vw, 28px); border-radius: 17px; }
+.album-manager-picker { display: grid; gap: 7px; margin-bottom: 17px; }
+.album-manager-picker-row { display: flex; gap: 8px; }
+.album-manager-picker select { flex: 1; min-width: 0; min-height: 40px; padding: 0 12px; border: 1px solid #595363; border-radius: 8px; background: #1b1c24; color: #f3f0f7; font: inherit; font-size: 12px; }
+.album-manager-picker select:focus-visible { outline: 2px solid #b49ae6; outline-offset: 2px; }
+.album-manager-picker-row button { display: flex; align-items: center; justify-content: center; gap: 5px; min-width: 85px; padding: 0 10px; border: 1px solid #685775; border-radius: 8px; background: #342c3e; color: #e4d0fc; cursor: pointer; font: inherit; font-size: 11px; font-weight: 700; }
+.album-manager-picker-row button:hover { background: #4c3b60; }
+.album-order-heading { display: flex; align-items: end; justify-content: space-between; gap: 12px; margin: 21px 0 9px; }
+.album-order-heading h3 { margin: 4px 0 0; font-size: 14px; }
+.album-order-heading h3 span { margin-left: 5px; color: #c6ace6; }
+.album-order-heading p { margin: 0; color: #aaa4b5; font-size: 10px; }
+.album-order-list { display: grid; align-content: start; gap: 5px; max-height: min(34svh, 325px); min-height: 60px; overflow-y: auto; overflow-x: hidden; padding: 2px 5px 2px 2px; scrollbar-width: thin; scrollbar-color: #79658f #22232b; }
+.album-order-row { display: flex; align-items: center; gap: 9px; min-width: 0; min-height: 44px; padding: 5px 8px; border: 1px solid #3d3c48; border-radius: 8px; background: #292934; }
+.album-order-row.dragging { opacity: .52; }
+.album-order-row.drop-before { box-shadow: 0 -3px 0 #b49ae6; }
+.album-order-row.drop-after { box-shadow: 0 3px 0 #b49ae6; }
+.album-order-number { flex: none; width: 20px; color: #b89adf; font-size: 10px; }
+.album-order-title { display: block; flex: 1; min-width: 0; overflow: hidden; color: #f1edf6; font-size: 11px; font-weight: 700; white-space: nowrap; text-overflow: ellipsis; }
+.album-order-title small { display: block; overflow: hidden; color: #a7a1b1; font-size: 9px; font-weight: 400; text-overflow: ellipsis; }
+.album-order-row button { display: grid; place-items: center; flex: none; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: #bda5d8; cursor: pointer; touch-action: none; }
+.album-order-row button:hover { background: #483953; color: #f4e9ff; }
+.album-order-row button:focus-visible { outline: 2px solid #b49ae6; outline-offset: 1px; }
+.album-order-empty { margin: 15px; color: #aaa4b5; font-size: 11px; }
+@media (max-width: 520px) { .add-modal--album-manager { padding: 17px; } .album-order-heading { align-items: start; flex-direction: column; gap: 4px; } .album-order-list { max-height: min(31svh, 290px); } }
 .modal-header {
   display: flex;
   justify-content: space-between;

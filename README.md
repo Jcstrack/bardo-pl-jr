@@ -40,7 +40,7 @@ El enlace completo es una credencial: quien lo reciba también podrá entrar. Gu
 
 ### Importar las canciones que ya tenías
 
-Los datos de `localStorage` pertenecen a la dirección exacta y al perfil de navegador donde se crearon. En este equipo, Bardo reconoce al propietario automáticamente al abrir `http://localhost:8088/` y ya importó **7 álbumes y 39 canciones** de Brave a la biblioteca del servidor. Si tenías canciones adicionales bajo `http://localhost:5173/`, abre esa dirección en el mismo perfil para importarlas también. Los atajos privados de activación quedan como respaldo; puedes regenerarlos con:
+Los datos de `localStorage` pertenecen a la dirección exacta y al perfil de navegador donde se crearon. En este equipo, Bardo reconoce al propietario automáticamente al abrir `http://localhost:8088/`. Esa es la única dirección local publicada para el frontend. Los atajos privados de activación quedan como respaldo; puedes regenerar el de `localhost:8088` con:
 
 ```powershell
 ./tools/Create-Invites.ps1
@@ -52,7 +52,7 @@ La API permite consultar, crear, actualizar y eliminar álbumes y canciones medi
 
 ### Extensión de Brave
 
-Entrega a tu amigo [Bardo-Extension-0.2.2.zip](../Bardo-Extension-Instalador/Bardo-Extension-0.2.2.zip) desde `C:\Users\juaul\OneDrive\Escritorio\PROYECTO\POLITANIA\Bardo-Extension-Instalador`. Debe extraer el ZIP y seguir `LEEME.md` para cargar la carpeta `extension` desde `brave://extensions/`. Brave requiere esa confirmación dentro del navegador. La extensión reconoce la dirección HTTPS temporal de Bardo y permite controlar la pestaña que el usuario conecte.
+Entrega a tu amigo [Bardo-Extension-0.2.3.zip](../Bardo-Extension-Instalador/Bardo-Extension-0.2.3.zip) desde `C:\Users\juaul\OneDrive\Escritorio\PROYECTO\POLITANIA\Bardo-Extension-Instalador`. Debe extraer el ZIP y seguir `LEEME.md` para cargar la carpeta `extension` desde `brave://extensions/`. Brave requiere esa confirmación dentro del navegador. La extensión reconoce la dirección HTTPS temporal de Bardo y permite controlar la pestaña que el usuario conecte.
 
 ## Bot de Discord
 
@@ -68,6 +68,8 @@ El bot conserva un búfer de **1200 ms** que evita cortes. Durante un salto, el 
 - **Anterior:** un clic vuelve al inicio de la canción actual; dos clics seguidos, dentro de 1,5 segundos, cambian a la canción anterior. Funciona también en el reproductor minimizado.
 - **Clic derecho en Play o Repetir:** marca el inicio y un punto de término. El término aparece inicialmente 10 segundos por delante para que se vea el tramo; puedes arrastrarlo al segundo exacto. Las marcas se guardan con cada canción.
 - **Buscar:** la lupa junto al selector de álbum abre un buscador flotante por título o artista en toda la biblioteca. Cada resultado indica sus álbumes y elegirlo reproduce la canción sin cambiar su orden.
+- **Álbumes:** el botón de tres puntos abre las opciones para crear o administrar un álbum. En el modal puedes cambiar de álbum, renombrarlo, ordenar sus canciones arrastrando el icono o con Alt + flechas, editar una canción y eliminar el álbum.
+- **Volumen:** un clic abre la barra; dentro de ella puedes silenciar y recuperar el nivel anterior. El clic derecho sobre el icono también alterna silencio.
 - **Video:** **Mostrar video** amplía el iframe dentro del reproductor; al ocultarlo vuelve a escala cero sin reiniciar el audio. En la ventana flotante y minimizada se muestra solo el icono. Si se abre desde la vista minimizada, el reproductor se expande para darle espacio.
 
 ## Mantenimiento

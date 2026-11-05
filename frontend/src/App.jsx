@@ -142,6 +142,7 @@ function App() {
   const contentRef = useRef(null);
   const volumeButtonRef = useRef(null);
   const volumePopoverRef = useRef(null);
+  const previousVolumeRef = useRef(volume > 0 ? volume : 0.8);
   const dragRef = useRef(null);
   const dragDepthRef = useRef(0);
   const captureRef = useRef(null);
@@ -900,6 +901,17 @@ function App() {
     });
   };
 
+  const toggleMute = (event) => {
+    event?.preventDefault();
+    setVolume((current) => {
+      if (current > 0) {
+        previousVolumeRef.current = current;
+        return 0;
+      }
+      return previousVolumeRef.current || 0.8;
+    });
+  };
+
   useEffect(() => {
     if (!repeatMenu) return;
     const close = (event) => {
@@ -1571,6 +1583,10 @@ function App() {
     setMessage("");
     setModal("album-edit");
   };
+  const switchManagedAlbum = (id) => {
+    switchAlbum(id);
+    setAlbumName(albums.find((album) => album.id === id)?.name || '');
+  };
   const openAddMusic = () => {
     if (!editorKey) return setMessage('Abre un enlace de invitación para agregar música.');
     setUrl("");
@@ -1629,7 +1645,7 @@ function App() {
           <PlayerWindowHeader minimized={view === "minimized"} maximized={view === "maximized"} onDragStart={dragStart} onDragMove={dragMove} onDragEnd={() => { dragRef.current = null; }} onExpand={expandPlayer} onMaximize={maximizePlayer} onMinimize={minimizePlayer} onClose={closePlayer} />
 
           {view === "minimized" && <>
-            <MiniPlayer active={active} live={live} tabConnected={tabController.connected} captureMode={captureMode} playing={playing} canControlPlayback={canControlPlayback} playbackCount={playbackTracks.length} volume={volume} volumeOpen={volumeOpen} volumeButtonRef={volumeButtonRef} repeat={repeat} libraryOpen={miniLibraryOpen} message={message} onPrevious={previousOrRestart} onStep={step} onPlay={togglePlay} onPlayMenu={openPlaybackMenu} onVolumeToggle={() => setVolumeOpen((old) => !old)} onRepeatToggle={() => setRepeat((old) => !old)} onRepeatMenu={openRepeatMenu} onOpenLibrary={toggleMiniLibrary} onShowVideo={() => changeVideoVisibility(true)} onDismissMessage={() => setMessage("")} />
+            <MiniPlayer active={active} live={live} tabConnected={tabController.connected} captureMode={captureMode} playing={playing} canControlPlayback={canControlPlayback} playbackCount={playbackTracks.length} volume={volume} volumeOpen={volumeOpen} volumeButtonRef={volumeButtonRef} repeat={repeat} libraryOpen={miniLibraryOpen} message={message} onPrevious={previousOrRestart} onStep={step} onPlay={togglePlay} onPlayMenu={openPlaybackMenu} onVolumeToggle={() => setVolumeOpen((old) => !old)} onMuteToggle={toggleMute} onRepeatToggle={() => setRepeat((old) => !old)} onRepeatMenu={openRepeatMenu} onOpenLibrary={toggleMiniLibrary} onShowVideo={() => changeVideoVisibility(true)} onDismissMessage={() => setMessage("")} />
             {miniLibraryOpen && <MiniLibrary albums={albums} selectedAlbumId={selectedAlbumId} selectedAlbum={selectedAlbum} albumTracks={albumTracks} allTracks={searchableTracks} activeId={activeId} playing={playing} captureMode={captureMode} onSwitchAlbum={switchAlbum} onCreateAlbum={openCreateAlbum} onEditAlbum={openEditAlbum} onChooseTrack={choose} onEditTrack={edit} onRemoveTrack={remove} onReorderTrack={moveTrack} onAddMusic={openAddMusic} />}
           </>}
 
@@ -1644,7 +1660,7 @@ function App() {
 
             <PlaybackTimeline active={active} mediaIsLive={mediaIsLive} duration={duration} elapsed={discordTimeline.position} pendingSeek={discordTimeline.pendingTarget} discordDelayed={discordStream.phase === 'on'} discordPlaying={Boolean(botTimeline.streaming)} loopStart={loopStart} loopEnd={loopEnd} playStart={playStart} playEnd={playEnd} playNext={playNext} onSeek={seekActive} onKeyboardSeek={seekWithKeyboard} onSetLoopMarker={setLoopMarker} onSetPlayMarker={setPlayMarker} />
 
-            <TransportControls active={active} live={live} tabConnected={tabController.connected} captureMode={captureMode} canControlPlayback={canControlPlayback} playbackCount={playbackTracks.length} playing={playing} repeat={repeat} volume={volume} volumeOpen={volumeOpen} volumeButtonRef={volumeButtonRef} minimized={view === "minimized"} libraryOpen={libraryOpen} onPrevious={previousOrRestart} onStep={step} onPlay={togglePlay} onPlayMenu={openPlaybackMenu} onRepeatToggle={() => setRepeat((old) => !old)} onRepeatMenu={openRepeatMenu} onVolumeToggle={() => setVolumeOpen((old) => !old)} onLibraryToggle={() => setLibraryOpen((old) => !old)} /></div>
+            <TransportControls active={active} live={live} tabConnected={tabController.connected} captureMode={captureMode} canControlPlayback={canControlPlayback} playbackCount={playbackTracks.length} playing={playing} repeat={repeat} volume={volume} volumeOpen={volumeOpen} volumeButtonRef={volumeButtonRef} minimized={view === "minimized"} libraryOpen={libraryOpen} onPrevious={previousOrRestart} onStep={step} onPlay={togglePlay} onPlayMenu={openPlaybackMenu} onRepeatToggle={() => setRepeat((old) => !old)} onRepeatMenu={openRepeatMenu} onVolumeToggle={() => setVolumeOpen((old) => !old)} onMuteToggle={toggleMute} onLibraryToggle={() => setLibraryOpen((old) => !old)} /></div>
 
             {libraryOpen && view !== "minimized" && <>
               <div className="library-area"><Suspense fallback={<p className="source-loading" role="status">Cargando biblioteca…</p>}><LibraryPanel albums={albums} selectedAlbumId={selectedAlbumId} selectedAlbum={selectedAlbum} albumTracks={albumTracks} allTracks={searchableTracks} activeId={activeId} playing={playing} captureMode={captureMode} message={message} onSwitchAlbum={switchAlbum} onCreateAlbum={openCreateAlbum} onEditAlbum={openEditAlbum} onShareTab={shareTab} onChooseTrack={choose} onEditTrack={edit} onRemoveTrack={remove} onReorderTrack={moveTrack} onAddMusic={openAddMusic} onDismissMessage={() => setMessage("")} /></Suspense></div>
@@ -1654,12 +1670,12 @@ function App() {
         </section>
       )}
 
-      <VolumePopover open={volumeOpen} position={volumePosition} popoverRef={volumePopoverRef} volume={volume} onChange={setVolume} />
+      <VolumePopover open={volumeOpen} position={volumePosition} popoverRef={volumePopoverRef} volume={volume} onChange={setVolume} onMuteToggle={toggleMute} />
 
       <RepeatMenu position={repeatMenu} duration={duration} elapsed={elapsed} loopStart={loopStart} loopEnd={loopEnd} onSetMarker={setLoopMarker} onClear={clearLoopMarkers} onClose={() => setRepeatMenu(null)} />
       <PlaybackMenu position={playbackMenu} duration={duration} elapsed={elapsed} playStart={playStart} playEnd={playEnd} playNext={playNext} onSetMarker={setPlayMarker} onClear={clearPlayMarkers} onClose={() => setPlaybackMenu(null)} />
 
-      {modal && <Suspense fallback={null}><MusicModal modal={modal} albumName={albumName} onAlbumNameChange={setAlbumName} editingTrack={editingTrack} albums={albums} editingAlbumIds={editingAlbumIds} onEditingAlbumIdsChange={setEditingAlbumIds} url={url} onUrlChange={setUrl} title={title} onTitleChange={setTitle} message={message} onClearMessage={() => setMessage("")} onClose={() => setModal(null)} onCreateAlbum={createAlbum} onRenameAlbum={renameAlbum} onDeleteAlbum={deleteAlbum} onAddLink={addLink} onSaveEdit={saveEdit} onUploadClick={() => fileRef.current.click()} onShareTab={shareTab} /></Suspense>}
+      {modal && <Suspense fallback={null}><MusicModal modal={modal} albumName={albumName} onAlbumNameChange={setAlbumName} selectedAlbum={selectedAlbum} albumTracks={albumTracks} allTracks={searchableTracks} onSwitchAlbum={switchManagedAlbum} onOpenCreateAlbum={openCreateAlbum} onReorderTrack={moveTrack} onEditTrack={edit} editingTrack={editingTrack} albums={albums} editingAlbumIds={editingAlbumIds} onEditingAlbumIdsChange={setEditingAlbumIds} url={url} onUrlChange={setUrl} title={title} onTitleChange={setTitle} message={message} onClearMessage={() => setMessage("")} onClose={() => setModal(null)} onCreateAlbum={createAlbum} onRenameAlbum={renameAlbum} onDeleteAlbum={deleteAlbum} onAddLink={addLink} onSaveEdit={saveEdit} onUploadClick={() => fileRef.current.click()} onShareTab={shareTab} /></Suspense>}
 
       <input
         ref={fileRef}

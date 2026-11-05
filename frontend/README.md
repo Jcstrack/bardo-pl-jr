@@ -1,4 +1,4 @@
-# Sonora · Reproductor flotante en React
+# Bardo Politanense JR · Reproductor flotante en React
 
 ## Estructura de `src`
 
@@ -14,22 +14,21 @@ Ejemplo de reproductor de audio hecho con React y Vite. La primera vez solo apar
 
 La barra superior permite **minimizar**, **maximizar/restaurar** o **cerrar**. El modo maximizado ocupa la ventana del navegador y reordena la biblioteca bajo el reproductor cuando el ancho es reducido. El modo minimizado conserva el nombre, los controles básicos, repetición y una lista propia de álbumes y canciones. El botón de la barra superior lo devuelve al tamaño flotante. Cerrar pausa el audio.
 
-## Ejecutar
+## Ejecutar con el proyecto completo
 
-```bash
-pnpm install
-pnpm dev
+```powershell
+docker compose up -d --build
 ```
 
-Abre la dirección local que muestra Vite, normalmente `http://localhost:5173`. Para verificar la versión de producción: `pnpm build`.
+Abre `http://localhost:8088/`. El frontend se publica solo en ese puerto. Para desarrollar el frontend de forma aislada puedes usar `pnpm install` y `pnpm dev` dentro de `frontend/`; la aplicación completa usa Docker Compose.
 
 ## Fuentes de audio
 
-- **Álbumes:** crea un álbum con **＋** y añade allí tus canciones. Puedes cambiar de álbum con el selector, renombrarlo o eliminarlo con el botón de edición.
+- **Álbumes:** el menú de tres puntos permite crear o administrar álbumes. El modal permite cambiar de álbum, renombrarlo, ordenar sus canciones o eliminarlo.
 - **Enlace de YouTube:** pulsa **Añadir música** y pega un enlace de video. El iframe conserva un área de 256 × 200 píxeles para la API, pero el video se oculta con `scale(0)`. El navegador y YouTube eligen la calidad de transmisión; la API de inserción no permite forzar la resolución más baja. Algunos videos pueden prohibir la reproducción integrada.
 - **Enlace de Spotify:** pega un enlace `open.spotify.com/track/...` o `open.spotify.com/episode/...`. Se abre el reproductor oficial de Spotify. La disponibilidad completa depende de Spotify, el inicio de sesión y el navegador; puede reproducirse solo una vista previa. El volumen de Spotify se ajusta en su reproductor o en el dispositivo.
 - **Audio directo:** también puedes pegar la URL de un archivo MP3, WAV u OGG.
-- **Archivo local:** pulsa **Subir archivos** o arrastra archivos de audio a la página. Al soltarlos se añaden y se reproduce el primero. Se guardan en el navegador y reaparecen al volver.
+- **Archivo local:** pulsa **Subir archivos** o arrastra archivos de audio a la página. Se guardan en el servidor local y aparecen en la biblioteca compartida; IndexedDB conserva los archivos pendientes si falla una subida.
 - **Arrastrar enlaces:** también puedes soltar un enlace de YouTube o de audio directo. Se añade y comienza a reproducirse. Si aún no existe un álbum, el primer arrastre crea **Mi música** automáticamente.
 - **Editar:** haz clic derecho sobre una canción y elige **Editar canción**. Un clic normal reproduce esa pista. En la edición puedes modificar su nombre, URL y álbumes.
 - **Ordenar:** arrastra una canción desde el icono de seis puntos. Su número y el orden de reproducción se actualizan y se guardan. Con el asa enfocada, también puedes usar `Alt` + flechas arriba/abajo.

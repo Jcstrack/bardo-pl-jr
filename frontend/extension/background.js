@@ -2,7 +2,7 @@ let sourceTabId = null;
 const restored = chrome.storage.session.get('sourceTabId').then((value) => { sourceTabId = value.sourceTabId ?? null; });
 
 async function broadcast(state) {
-  const tabs = await chrome.tabs.query({ url: ['http://localhost/*', 'http://127.0.0.1/*', 'https://*.trycloudflare.com/*'] });
+  const tabs = await chrome.tabs.query({ url: ['http://localhost/*', 'https://*.trycloudflare.com/*'] });
   for (const tab of tabs) chrome.tabs.sendMessage(tab.id, { type: 'BARDO_STATE', state }).catch(() => {});
 }
 

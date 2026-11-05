@@ -10,8 +10,7 @@ services:
         VITE_SPOTIFY_CLIENT_ID: ${VITE_SPOTIFY_CLIENT_ID:-}
     image: bardo-politanense-jr/frontend:local
     ports:
-      - "127.0.0.1:${BARDO_PORT:-8088}:80"
-      - "127.0.0.1:5173:80"
+      - "127.0.0.1:8088:80"
     depends_on:
       bot:
         condition: service_healthy

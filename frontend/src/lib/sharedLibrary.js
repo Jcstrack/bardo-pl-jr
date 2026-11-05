@@ -25,7 +25,7 @@ export function acceptInvite(value) {
 }
 
 export async function localOwnerKey() {
-  if (!['localhost', '127.0.0.1'].includes(window.location.hostname)) return ''
+  if (window.location.origin !== 'http://localhost:8088') return ''
   try {
     const response = await fetch(`http://${window.location.hostname}:3003/api/owner`, { cache: 'no-store' })
     if (!response.ok) return ''

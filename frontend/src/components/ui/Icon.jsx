@@ -12,6 +12,7 @@ const paths = {
   chevron: <path d="m6 9 6 6 6-6" />,
   plus: <path d="M12 5v14M5 12h14" />,
   edit: <><path d="M12 20h9M3 17.5V21h3.5L19 8.5 15.5 5 3 17.5ZM14 6.5l3.5 3.5" /></>,
+  more: <><circle cx="12" cy="5" r="1.5" fill="currentColor" stroke="none" /><circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none" /><circle cx="12" cy="19" r="1.5" fill="currentColor" stroke="none" /></>,
   close: <path d="M5 5 19 19M19 5 5 19" />,
   check: <path d="m5 12 4 4L19 6" />,
   minus: <path d="M5 12h14" />,

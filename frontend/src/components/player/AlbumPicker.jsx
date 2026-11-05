@@ -5,10 +5,13 @@ import Icon from '../ui/Icon.jsx';
 
 export default function AlbumPicker({ albums, selectedAlbum, selectedAlbumId, tracks = [], onSwitch, onCreate, onEdit, onChooseTrack }) {
   const [open, setOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [activeResultIndex, setActiveResultIndex] = useState(-1);
   const selectorRef = useRef(null);
+  const moreRef = useRef(null);
+  const moreButtonRef = useRef(null);
   const selectorButtonRef = useRef(null);
   const searchRef = useRef(null);
   const searchButtonRef = useRef(null);
@@ -25,6 +28,25 @@ export default function AlbumPicker({ albums, selectedAlbum, selectedAlbumId, tr
     document.addEventListener('pointerdown', closeOutside);
     return () => document.removeEventListener('pointerdown', closeOutside);
   }, [open]);
+
+  useEffect(() => {
+    if (!moreOpen) return;
+    const closeOutside = (event) => {
+      if (!moreRef.current?.contains(event.target)) setMoreOpen(false);
+    };
+    const closeEscape = (event) => {
+      if (event.key === 'Escape') {
+        setMoreOpen(false);
+        moreButtonRef.current?.focus();
+      }
+    };
+    document.addEventListener('pointerdown', closeOutside);
+    document.addEventListener('keydown', closeEscape);
+    return () => {
+      document.removeEventListener('pointerdown', closeOutside);
+      document.removeEventListener('keydown', closeEscape);
+    };
+  }, [moreOpen]);
 
   useEffect(() => {
     if (!searchOpen) return undefined;
@@ -116,8 +138,13 @@ export default function AlbumPicker({ albums, selectedAlbum, selectedAlbumId, tr
             </div>
           </div>}
         </div>
-        <button type="button" aria-label="Crear álbum" title="Crear álbum" onClick={onCreate}><Icon name="plus" size={17} /></button>
-        <button type="button" aria-label="Editar álbum" title="Editar álbum" onClick={onEdit} disabled={!selectedAlbum}><Icon name="edit" size={16} /></button>
+        <div className="album-more" ref={moreRef}>
+          <button ref={moreButtonRef} type="button" className="album-more-toggle" aria-label="Más opciones de álbum" aria-haspopup="menu" aria-expanded={moreOpen} title="Más opciones de álbum" onClick={() => { setOpen(false); setSearchOpen(false); setMoreOpen((old) => !old); }}><Icon name="more" size={17} /></button>
+          {moreOpen && <div className="album-more-menu" role="menu" aria-label="Opciones de álbum">
+            <button type="button" role="menuitem" onClick={() => { setMoreOpen(false); onEdit(); }} disabled={!selectedAlbum}><Icon name="edit" size={15} /> Administrar álbum</button>
+            <button type="button" role="menuitem" onClick={() => { setMoreOpen(false); onCreate(); }}><Icon name="plus" size={15} /> Crear álbum</button>
+          </div>}
+        </div>
       </div>
     </div>
   );

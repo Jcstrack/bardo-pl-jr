@@ -342,14 +342,11 @@ export async function startServer({ port = Number(process.env.LIBRARY_PORT || 30
   server.on('close', () => repository.close())
   const ownerPort = Number(process.env.LIBRARY_OWNER_PORT || 0)
   if (ownerPort) {
-    const allowedOrigins = new Set([
-      'http://localhost:8088', 'http://localhost:5173',
-      'http://127.0.0.1:8088', 'http://127.0.0.1:5173',
-    ])
+    const allowedOrigins = new Set(['http://localhost:8088'])
     const ownerServer = http.createServer((req, res) => {
       const origin = req.headers.origin || ''
       const host = req.headers.host || ''
-      if (req.method !== 'GET' || req.url !== '/api/owner' || !allowedOrigins.has(origin) || !['localhost', '127.0.0.1'].includes(host.split(':')[0])) {
+      if (req.method !== 'GET' || req.url !== '/api/owner' || !allowedOrigins.has(origin) || host.split(':')[0] !== 'localhost') {
         return json(res, 403, { error: 'Acceso local no autorizado.' })
       }
       res.writeHead(200, {

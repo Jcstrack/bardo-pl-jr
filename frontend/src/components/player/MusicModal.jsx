@@ -1,28 +1,45 @@
+import { useEffect } from 'react';
 import Icon from '../ui/Icon.jsx';
+import AlbumOrderList from './AlbumOrderList.jsx';
+import { albumIdsOf } from '../../lib/trackAlbums.js';
 
-export default function MusicModal({ modal, albumName, onAlbumNameChange, editingTrack, albums, editingAlbumIds, onEditingAlbumIdsChange, url, onUrlChange, title, onTitleChange, message, onClearMessage, onClose, onCreateAlbum, onRenameAlbum, onDeleteAlbum, onAddLink, onSaveEdit, onUploadClick, onShareTab }) {
+export default function MusicModal({ modal, albumName, onAlbumNameChange, selectedAlbum, albumTracks, allTracks, onSwitchAlbum, onOpenCreateAlbum, onReorderTrack, onEditTrack, editingTrack, albums, editingAlbumIds, onEditingAlbumIdsChange, url, onUrlChange, title, onTitleChange, message, onClearMessage, onClose, onCreateAlbum, onRenameAlbum, onDeleteAlbum, onAddLink, onSaveEdit, onUploadClick, onShareTab }) {
+  useEffect(() => {
+    if (!modal) return;
+    const closeEscape = (event) => { if (event.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', closeEscape);
+    return () => document.removeEventListener('keydown', closeEscape);
+  }, [modal, onClose]);
   if (!modal) return null;
   const isAlbum = modal.startsWith('album');
 
   return (
     <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
-      <section className={modal === 'edit' ? 'add-modal add-modal--edit' : 'add-modal'} role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <section className={'add-modal ' + (modal === 'edit' ? 'add-modal--edit' : modal === 'album-edit' ? 'add-modal--album-manager' : '')} role="dialog" aria-modal="true" aria-labelledby="modal-title">
         <div className="modal-header">
           <div>
             <span className="section-label">{isAlbum ? 'TU BIBLIOTECA' : modal === 'add' ? 'NUEVA FUENTE' : 'MODIFICAR PISTA'}</span>
-            <h2 id="modal-title">{modal === 'album-add' ? 'Crear álbum' : modal === 'album-edit' ? 'Editar álbum' : modal === 'add' ? 'Añadir música' : 'Editar canción'}</h2>
+            <h2 id="modal-title">{modal === 'album-add' ? 'Crear álbum' : modal === 'album-edit' ? 'Administrar álbumes' : modal === 'add' ? 'Añadir música' : 'Editar canción'}</h2>
           </div>
           <button type="button" className="modal-close" aria-label="Cerrar" onClick={onClose}><Icon name="close" size={16} /></button>
         </div>
         {isAlbum ? (
           <>
+            {modal === 'album-edit' && <div className="album-manager-picker">
+              <label htmlFor="managed-album">Álbum activo</label>
+              <div className="album-manager-picker-row"><select id="managed-album" value={selectedAlbum?.id || ''} onChange={(event) => onSwitchAlbum(event.target.value)}>{albums.map((album) => <option key={album.id} value={album.id}>{album.name} · {allTracks.filter((track) => albumIdsOf(track).includes(album.id)).length} canciones</option>)}</select><button type="button" onClick={onOpenCreateAlbum}><Icon name="plus" size={16} /> Nuevo</button></div>
+            </div>}
             <form onSubmit={modal === 'album-add' ? onCreateAlbum : onRenameAlbum}>
               <label htmlFor="album-name">Nombre del álbum</label>
               <input id="album-name" type="text" maxLength="80" placeholder="Por ejemplo: Favoritas" value={albumName} onChange={(event) => onAlbumNameChange(event.target.value)} required autoFocus />
               {message && <p className="form-error" role="alert">{message}</p>}
               <button type="submit" className="submit-button">{modal === 'album-add' ? 'Crear álbum' : 'Guardar nombre'} <span>→</span></button>
             </form>
-            {modal === 'album-edit' && <button type="button" className="delete-album" onClick={onDeleteAlbum}>Eliminar álbum</button>}
+            {modal === 'album-edit' && <>
+              <div className="album-order-heading"><div><span className="section-label">CANCIONES</span><h3>Orden de reproducción <span>{albumTracks.length}</span></h3></div><p>Arrastra el icono o usa Alt + ↑/↓.</p></div>
+              <AlbumOrderList tracks={albumTracks} onReorder={onReorderTrack} onEditTrack={onEditTrack} />
+              <button type="button" className="delete-album" onClick={onDeleteAlbum}>Eliminar álbum</button>
+            </>}
           </>
         ) : (
           <>

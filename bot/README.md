@@ -1,6 +1,6 @@
 # Bardo Politanense JR
 
-Servicio local de Discord para Sonora. El token se lee **solo** en Node desde un archivo local indicado por `DISCORD_TOKEN_FILE`; React consulta únicamente el estado a través del proxy de Vite.
+Servicio local de Discord para Bardo. El token se lee **solo** en Node desde un archivo local indicado por `DISCORD_TOKEN_FILE`; React consulta únicamente el estado a través del proxy Nginx.
 
 ## Preparar Discord
 
@@ -12,17 +12,4 @@ El archivo `.env` guarda solo la ruta del token y está ignorado por Git. Tambi�
 
 ## Ejecutar
 
-En WSL, desde `sonora-bot`:
-
-```bash
-pnpm install
-pnpm start
-```
-
-En otra terminal, desde `sonora`:
-
-```bash
-pnpm dev
-```
-
-Vite envía `/api/bot/status` al servicio local en `127.0.0.1:3001`. Puedes comprobarlo con `http://127.0.0.1:5173/api/bot/status`. El proxy de Vite solo funciona en desarrollo; al publicar la aplicación configura el servidor web para enviar `/api/bot` al backend y protege cualquier futura ruta que ejecute acciones. El servicio actual solo expone el estado de conexión.
+Desde la raíz del proyecto, `docker compose up -d --build` inicia el frontend, la biblioteca y el bot. Abre `http://localhost:8088/`; Nginx dirige `/api/bot` al contenedor del bot. Para comprobar el estado local usa `http://localhost:8088/api/bot/status`.

@@ -13,6 +13,3 @@ function Save-Shortcut([string]$name, [string]$baseUrl) {
 }
 
 Save-Shortcut 'Activar-Edicion-Local-8088.url' 'http://localhost:8088/'
-Save-Shortcut 'Activar-Edicion-127-8088.url' 'http://127.0.0.1:8088/'
-Save-Shortcut 'Activar-Edicion-Local-5173.url' 'http://localhost:5173/'
-Save-Shortcut 'Activar-Edicion-127-5173.url' 'http://127.0.0.1:5173/'
