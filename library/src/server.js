@@ -7,6 +7,7 @@ import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { openRepository } from './repository.js'
+import { readPublicUrl } from './publicUrl.js'
 
 const root = process.env.LIBRARY_DATA_DIR || '/data'
 const uploads = path.join(root, 'uploads')
@@ -18,7 +19,7 @@ const maxJsonBytes = 2 * 1024 * 1024
 const idPattern = /^[a-zA-Z0-9_-]{1,80}$/
 const audioNamePattern = /\.(mp3|m4a|aac|wav|ogg|oga|opus|flac|webm)$/i
 const allowedKinds = new Set(['file', 'url', 'youtube', 'spotify'])
-const allowedTrackKeys = ['id', 'albumId', 'albumIds', 'title', 'artist', 'src', 'kind', 'tone', 'fallbackTitle', 'loopStart', 'loopEnd', 'playStart', 'playEnd', 'serverSrc', 'stored']
+const allowedTrackKeys = ['id', 'albumId', 'albumIds', 'title', 'artist', 'src', 'kind', 'tone', 'fallbackTitle', 'loopStart', 'loopEnd', 'playStart', 'playEnd', 'playNext', 'serverSrc', 'stored']
 
 function youtubeVideoId(source) {
   try {
@@ -102,7 +103,7 @@ function cleanTrack(value, albumIds) {
     track.videoId = youtubeVideoId(track.src)
     if (!track.videoId) throw error(400, 'El enlace de YouTube no contiene un video válido.')
   }
-  for (const key of ['loopStart', 'loopEnd', 'playStart', 'playEnd']) {
+  for (const key of ['loopStart', 'loopEnd', 'playStart', 'playEnd', 'playNext']) {
     if (!Number.isFinite(track[key]) || track[key] < 0) delete track[key]
   }
   track.tone = ['green', 'orange', 'violet'].includes(track.tone) ? track.tone : 'violet'
@@ -246,7 +247,7 @@ export async function startServer({ port = Number(process.env.LIBRARY_PORT || 30
       const url = new URL(req.url, 'http://localhost')
       if (url.pathname === '/health') return json(res, 200, { ok: true })
       if (url.pathname === '/api/library/info' && req.method === 'GET') {
-        return json(res, 200, { publicUrl: process.env.BARDO_PUBLIC_URL || '' })
+        return json(res, 200, { publicUrl: await readPublicUrl(process.env.BARDO_TUNNEL_URL_FILE, process.env.BARDO_PUBLIC_URL) })
       }
       if (url.pathname === '/api/library/session' && req.method === 'POST') {
         const token = req.headers.authorization?.replace(/^Bearer /i, '') || ''
@@ -258,12 +259,13 @@ export async function startServer({ port = Number(process.env.LIBRARY_PORT || 30
       }
       if (url.pathname === '/api/library/invite' && req.method === 'POST') {
         if (accessRole(req, key) !== 'owner') throw error(403, 'Solo el propietario puede crear la invitación.')
-        if (!process.env.BARDO_PUBLIC_URL) throw error(503, 'La dirección privada aún no está lista.')
+        const publicUrl = await readPublicUrl(process.env.BARDO_TUNNEL_URL_FILE, process.env.BARDO_PUBLIC_URL)
+        if (!publicUrl) throw error(503, 'La dirección privada aún no está lista.')
         if (!friendKey) {
           friendKey = randomBytes(32).toString('hex')
           await writeFile(invitationFile, JSON.stringify({ token: friendKey }), { mode: 0o600 })
         }
-        return json(res, 200, { url: `${process.env.BARDO_PUBLIC_URL}#invite=${friendKey}` })
+        return json(res, 200, { url: `${publicUrl}#invite=${friendKey}` })
       }
       if (url.pathname === '/api/library') {
         if (req.method !== 'GET') throw error(405, 'Método no permitido.')

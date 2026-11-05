@@ -34,6 +34,8 @@ Inicia el enlace temporal:
 
 En el reproductor abre **Canciones → Compartir biblioteca → Generar invitación → Copiar** y envía **ese enlace completo** a tu amigo. Al abrirlo, Bardo activa su acceso automáticamente, incluso si pega la invitación en una pestaña donde Bardo ya estaba abierto; no hay correo ni PIN. El catálogo se lee de la misma base de datos y ambos pueden agregar, editar y quitar canciones y álbumes. En Brave, la extensión solo hace falta para controlar otra pestaña: se entrega por separado.
 
+El túnel escribe su dirección actual en un volumen privado de Docker y la API la lee al mostrar o generar la invitación. No hace falta copiar la URL a `.env` ni reiniciar la biblioteca cuando Cloudflare cambia la dirección. Si el túnel se detiene, el botón espera a que exista una dirección nueva.
+
 El enlace completo es una credencial: quien lo reciba también podrá entrar. Guárdalo solo para tu amigo. Detén el túnel con `./tools/Stop-QuickTunnel.ps1`. Cuando lo reinicies, la dirección cambiará y deberás copiar una invitación nueva desde el botón. Cloudflare Quick Tunnels no ofrece URL fija ni garantía de disponibilidad; para una dirección permanente hará falta configurar un dominio. [Documentación de Cloudflare](https://developers.cloudflare.com/tunnel/get-started/quick-tunnels/).
 
 ### Importar las canciones que ya tenías
@@ -50,7 +52,7 @@ La API permite consultar, crear, actualizar y eliminar álbumes y canciones medi
 
 ### Extensión de Brave
 
-Entrega a tu amigo [Bardo-Extension-0.2.1.zip](../Bardo-Extension-Instalador/Bardo-Extension-0.2.1.zip) desde `C:\Users\juaul\OneDrive\Escritorio\PROYECTO\POLITANIA\Bardo-Extension-Instalador`. Debe extraer el ZIP y seguir `LEEME.md` para cargar la carpeta `extension` desde `brave://extensions/`. Brave requiere esa confirmación dentro del navegador. La extensión reconoce la dirección HTTPS temporal de Bardo y permite controlar la pestaña que el usuario conecte.
+Entrega a tu amigo [Bardo-Extension-0.2.2.zip](../Bardo-Extension-Instalador/Bardo-Extension-0.2.2.zip) desde `C:\Users\juaul\OneDrive\Escritorio\PROYECTO\POLITANIA\Bardo-Extension-Instalador`. Debe extraer el ZIP y seguir `LEEME.md` para cargar la carpeta `extension` desde `brave://extensions/`. Brave requiere esa confirmación dentro del navegador. La extensión reconoce la dirección HTTPS temporal de Bardo y permite controlar la pestaña que el usuario conecte.
 
 ## Bot de Discord
 
@@ -60,6 +62,13 @@ Entrega a tu amigo [Bardo-Extension-0.2.1.zip](../Bardo-Extension-Instalador/Bar
 4. Consulta `/estado` o usa `/salir` para desconectarlo. Tras reiniciar el bot, ejecuta `/conectar` otra vez.
 
 El bot conserva un búfer de **1200 ms** que evita cortes. Durante un salto, el punto principal indica el destino solicitado y una marca secundaria muestra la posición que aún sale por Discord; al terminar el búfer vuelven a coincidir. La captura de pestaña la solicita tu navegador al activar el modo; el enlace HTTPS permite usarla desde otro ordenador.
+
+### Controles del reproductor
+
+- **Anterior:** un clic vuelve al inicio de la canción actual; dos clics seguidos, dentro de 1,5 segundos, cambian a la canción anterior. Funciona también en el reproductor minimizado.
+- **Clic derecho en Play o Repetir:** marca el inicio y un punto de término. El término aparece inicialmente 10 segundos por delante para que se vea el tramo; puedes arrastrarlo al segundo exacto. Las marcas se guardan con cada canción.
+- **Buscar:** la lupa junto al selector de álbum abre un buscador flotante por título o artista en toda la biblioteca. Cada resultado indica sus álbumes y elegirlo reproduce la canción sin cambiar su orden.
+- **Video:** **Mostrar video** amplía el iframe dentro del reproductor; al ocultarlo vuelve a escala cero sin reiniciar el audio. En la ventana flotante y minimizada se muestra solo el icono. Si se abre desde la vista minimizada, el reproductor se expande para darle espacio.
 
 ## Mantenimiento
 

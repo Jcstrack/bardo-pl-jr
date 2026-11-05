@@ -1,11 +1,12 @@
 import { lazy, Suspense } from 'react';
 import Icon from '../ui/Icon.jsx';
 import { parseMediaUrl } from '../../lib/mediaSources.js';
+import { repeatEnd, repeatStart } from '../../lib/playbackRange.js';
 
 const YouTubePlayer = lazy(() => import('../media/YouTubePlayer.jsx'));
 const SpotifyPlayer = lazy(() => import('../media/SpotifyPlayer.jsx'));
 
-export default function PlaybackSource({ active, live, captureMode, tabConnected, spotifyAuth, sourceIsLive, volume, startAt, autoPlayRef, youtubeRef, spotifyRef, repeat, loopStart, loopEnd, playEnd, playing, loopSeekRef, onPlaying, onElapsed, onDuration, onStep, onMessage }) {
+export default function PlaybackSource({ active, live, captureMode, tabConnected, spotifyAuth, sourceIsLive, volume, startAt, autoPlayRef, youtubeRef, spotifyRef, repeat, loopStart, loopEnd, playEnd, playNext, playing, maximized, videoOpen, onVideoVisibility, loopSeekRef, onPlaying, onElapsed, onDuration, onStep, onAdvance, onMessage }) {
   let videoId = active?.videoId;
   if (active?.kind === 'youtube' && !videoId) {
     try { videoId = parseMediaUrl(active.src).videoId; }
@@ -28,6 +29,10 @@ export default function PlaybackSource({ active, live, captureMode, tabConnected
           key={active.id + videoId}
           videoId={videoId}
           volume={volume}
+          maximized={maximized}
+          sourceUrl={active.src}
+          videoOpen={videoOpen}
+          onVideoVisibility={onVideoVisibility}
           autoPlayRef={autoPlayRef}
           startAt={startAt}
           playerRef={youtubeRef}
@@ -35,23 +40,30 @@ export default function PlaybackSource({ active, live, captureMode, tabConnected
             if (state === 1) onPlaying(true);
             if (state === 2 || state === 0) onPlaying(false);
             if (state === 0) {
-              if (playEnd !== null) return;
               if (repeat && youtubeRef.current) {
-                youtubeRef.current.seekTo(loopStart ?? active?.playStart ?? 0, true);
+                youtubeRef.current.seekTo(repeatStart(loopStart, active?.playStart), true);
                 youtubeRef.current.playVideo();
-              } else onStep(1, true);
+                return;
+              }
+              if (playEnd !== null) return;
+              onStep(1, true);
             }
           }}
           onProgress={(current, total) => {
             onElapsed(Number.isFinite(current) ? current : 0);
             onDuration(Number.isFinite(total) && total > 0 ? total : 0);
-            if (playEnd !== null && playing && current >= playEnd) {
-              youtubeRef.current?.pauseVideo();
+            const cycleEnd = repeatEnd(loopEnd, playNext, playEnd, total, repeatStart(loopStart, active?.playStart));
+            if (repeat && playing && cycleEnd > 0 && current >= cycleEnd - 0.15 && Date.now() - loopSeekRef.current > 850) {
+              loopSeekRef.current = Date.now();
+              youtubeRef.current?.seekTo(repeatStart(loopStart, active?.playStart), true);
               return;
             }
-            if (repeat && loopEnd !== null && playing && current >= loopEnd && Date.now() - loopSeekRef.current > 850) {
-              loopSeekRef.current = Date.now();
-              youtubeRef.current?.seekTo(loopStart ?? active?.playStart ?? 0, true);
+            if (!repeat && playNext !== null && playing && current >= playNext) {
+              onAdvance();
+              return;
+            }
+            if (!repeat && playEnd !== null && playing && current >= playEnd) {
+              youtubeRef.current?.pauseVideo();
             }
           }}
           onError={(reason) => onMessage(reason === 'timeout' || reason === 'load'
@@ -81,22 +93,23 @@ export default function PlaybackSource({ active, live, captureMode, tabConnected
             onProgress={(current, total, isPlaying) => {
               onElapsed(Number.isFinite(current) ? current : 0);
               onDuration(Number.isFinite(total) && total > 0 ? total : 0);
-              if (playEnd !== null && isPlaying && current >= playEnd) {
-                spotifyRef.current?.pause();
+              const cycleEnd = repeatEnd(loopEnd, playNext, playEnd, total, repeatStart(loopStart, active?.playStart));
+              if (repeat && isPlaying && cycleEnd > 0 && current >= cycleEnd - 0.2 && Date.now() - loopSeekRef.current > 850) {
+                loopSeekRef.current = Date.now();
+                spotifyRef.current?.seek(Math.floor(repeatStart(loopStart, active?.playStart)));
                 return;
               }
-              const end = loopEnd ?? total;
-              if (repeat && isPlaying && end > 0 && current >= end - 0.2 && Date.now() - loopSeekRef.current > 850) {
-                loopSeekRef.current = Date.now();
-                spotifyRef.current?.seek(Math.floor(loopStart ?? active?.playStart ?? 0));
+              if (!repeat && playNext !== null && isPlaying && current >= playNext) {
+                onAdvance();
+                return;
+              }
+              if (!repeat && playEnd !== null && isPlaying && current >= playEnd) {
+                spotifyRef.current?.pause();
               }
             }}
             onError={() => onMessage("No se pudo abrir Spotify. Comprueba el enlace o ábrelo directamente allí.")}
           /></Suspense>
         </>
-      )}
-      {active?.kind === "youtube" && (
-        <a className="youtube-open" href={active.src} target="_blank" rel="noopener noreferrer"><span className="youtube-open-text">Abrir en YouTube ↗</span></a>
       )}
       {live && (
         <p className="source-note">{tabConnected

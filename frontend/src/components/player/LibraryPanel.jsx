@@ -3,10 +3,10 @@ import AlbumPicker from './AlbumPicker.jsx';
 import TrackList from './TrackList.jsx';
 import Notice from '../ui/Notice.jsx';
 
-export default function LibraryPanel({ albums, selectedAlbumId, selectedAlbum, albumTracks, activeId, playing, captureMode, message, onSwitchAlbum, onCreateAlbum, onEditAlbum, onShareTab, onChooseTrack, onEditTrack, onRemoveTrack, onReorderTrack, onAddMusic, onDismissMessage }) {
+export default function LibraryPanel({ albums, selectedAlbumId, selectedAlbum, albumTracks, allTracks, activeId, playing, captureMode, message, onSwitchAlbum, onCreateAlbum, onEditAlbum, onShareTab, onChooseTrack, onEditTrack, onRemoveTrack, onReorderTrack, onAddMusic, onDismissMessage }) {
   return (
     <>
-      <AlbumPicker albums={albums} selectedAlbum={selectedAlbum} selectedAlbumId={selectedAlbumId} onSwitch={onSwitchAlbum} onCreate={onCreateAlbum} onEdit={onEditAlbum} />
+      <AlbumPicker albums={albums} selectedAlbum={selectedAlbum} selectedAlbumId={selectedAlbumId} tracks={allTracks} onSwitch={onSwitchAlbum} onCreate={onCreateAlbum} onEdit={onEditAlbum} onChooseTrack={onChooseTrack} />
       <div className="playlist-header">
         <div>
           <span className="section-label">CANCIONES</span>

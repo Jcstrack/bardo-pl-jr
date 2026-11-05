@@ -6,7 +6,7 @@ export default function MusicModal({ modal, albumName, onAlbumNameChange, editin
 
   return (
     <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
-      <section className="add-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <section className={modal === 'edit' ? 'add-modal add-modal--edit' : 'add-modal'} role="dialog" aria-modal="true" aria-labelledby="modal-title">
         <div className="modal-header">
           <div>
             <span className="section-label">{isAlbum ? 'TU BIBLIOTECA' : modal === 'add' ? 'NUEVA FUENTE' : 'MODIFICAR PISTA'}</span>
@@ -37,10 +37,12 @@ export default function MusicModal({ modal, albumName, onAlbumNameChange, editin
               <input id="audio-title" type="text" placeholder="Mi canción" value={title} onChange={(event) => onTitleChange(event.target.value)} />
               {modal === 'edit' && <fieldset className="track-albums">
                 <legend>Guardar en álbumes</legend>
+                <p className="track-albums-hint">Puedes seleccionar más de un álbum.</p>
                 <div className="track-album-options">
                   {albums.map((album) => <label key={album.id} className="track-album-option">
                     <input type="checkbox" checked={editingAlbumIds.includes(album.id)} onChange={(event) => onEditingAlbumIdsChange((current) => event.target.checked ? [...current, album.id] : current.filter((id) => id !== album.id))} />
-                    <span>{album.name}</span>
+                    <span className="track-album-check-visual" aria-hidden="true"><Icon name="check" size={13} /></span>
+                    <span className="track-album-name" title={album.name}>{album.name}</span>
                   </label>)}
                 </div>
               </fieldset>}

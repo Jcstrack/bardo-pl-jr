@@ -49,12 +49,30 @@ export default function TrackList({ albumTracks, selectedAlbum, activeId, playin
     setDropTarget(null);
   };
 
+  const navigateWithKeyboard = (event) => {
+    if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || event.target.closest('.track-context-menu')) return;
+    if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+    const rows = [...event.currentTarget.querySelectorAll(':scope > .track-row')];
+    if (!rows.length) return;
+    const currentIndex = rows.indexOf(event.target.closest('.track-row'));
+    const nextIndex = event.key === 'Home' ? 0
+      : event.key === 'End' ? rows.length - 1
+        : currentIndex < 0 ? (event.key === 'ArrowUp' ? rows.length - 1 : 0)
+          : Math.max(0, Math.min(rows.length - 1, currentIndex + (event.key === 'ArrowDown' ? 1 : -1)));
+    const next = rows[nextIndex].querySelector('.track-title:not(:disabled)');
+    if (!next) return;
+    event.preventDefault();
+    next.focus();
+    next.scrollIntoView({ block: 'nearest' });
+  };
+
   return (
-    <div className="playlist" aria-label="Lista de reproducción">
+    <div className="playlist" role="list" aria-label="Lista de reproducción. Usa flecha arriba o abajo para elegir una canción y Enter para reproducirla" tabIndex={albumTracks.length ? 0 : -1} onKeyDown={navigateWithKeyboard}>
       {albumTracks.length ? albumTracks.map((track, index) => (
         <div
           key={track.id}
           data-track-id={track.id}
+          role="listitem"
           className={'track-row ' + (track.id === activeId ? 'selected ' : '') + (track.id === draggedTrackId ? 'dragging ' : '') + (dropTarget?.id === track.id ? (dropTarget.after ? 'drop-after' : 'drop-before') : '')}
           onContextMenu={(event) => showContextMenu(event, track)}
         >

@@ -42,7 +42,7 @@ test('biblioteca persistente, dos editores, archivos y permisos', async () => {
     assert.equal(uploaded.status, 201)
     const added = await sync({
       albums: { upsert: [{ id: 'album-one', name: 'Uno' }] },
-      tracks: { upsert: [{ id: 'track-one', albumId: 'album-one', albumIds: ['album-one'], title: 'Prueba', kind: 'file', artist: 'Local' }] },
+      tracks: { upsert: [{ id: 'track-one', albumId: 'album-one', albumIds: ['album-one'], title: 'Prueba', kind: 'file', artist: 'Local', playStart: 5, playNext: 35 }] },
     })
     assert.equal(added.status, 200)
     const anotherEditor = await sync({
@@ -52,6 +52,7 @@ test('biblioteca persistente, dos editores, archivos y permisos', async () => {
     assert.equal(anotherEditor.status, 200)
     assert.equal((await get()).tracks.length, 2)
     assert.equal((await get()).tracks.find((track) => track.id === 'track-two').playEnd, 45)
+    assert.equal((await get()).tracks.find((track) => track.id === 'track-one').playNext, 35)
     const partial = await fetch(`${base}/api/library/files/track-one`, { headers: { Range: 'bytes=0-3', Cookie: cookie } })
     assert.equal(partial.status, 206)
     assert.equal(await partial.text(), 'RIFF')
@@ -73,6 +74,7 @@ test('biblioteca persistente, dos editores, archivos y permisos', async () => {
     const saved = await fetch(`http://127.0.0.1:${server.address().port}/api/library`, { headers: { Authorization: `Bearer ${key}` } }).then((res) => res.json())
     assert.equal(saved.tracks.length, 2)
     assert.equal(saved.tracks.find((track) => track.id === 'track-two').playStart, 12)
+    assert.equal(saved.tracks.find((track) => track.id === 'track-one').playNext, 35)
     assert.equal(saved.revision, 3)
   } finally {
     if (server) await new Promise((resolve) => server.close(resolve))

@@ -3,7 +3,7 @@ import { albumIdsOf } from './trackAlbums.js'
 const EDITOR_KEY = 'bardo-library-editor-v1'
 const SYNCED_KEY = 'bardo-library-imported-v1'
 const OFFLINE_KEY = 'bardo-library-offline-changes-v1'
-const trackFields = ['id', 'albumId', 'albumIds', 'title', 'artist', 'src', 'kind', 'videoId', 'tone', 'fallbackTitle', 'loopStart', 'loopEnd', 'playStart', 'playEnd', 'serverSrc', 'stored']
+const trackFields = ['id', 'albumId', 'albumIds', 'title', 'artist', 'src', 'kind', 'videoId', 'tone', 'fallbackTitle', 'loopStart', 'loopEnd', 'playStart', 'playEnd', 'playNext', 'serverSrc', 'stored']
 
 export function editorKeyFromBrowser() {
   const hash = new URLSearchParams(window.location.hash.slice(1))

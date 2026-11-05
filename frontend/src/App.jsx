@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Icon from "./components/ui/Icon.jsx";
 import SiteHeader from "./components/layout/SiteHeader.jsx";
 import PlayerWindowHeader from "./components/player/PlayerWindowHeader.jsx";
@@ -11,7 +11,8 @@ import VolumePopover from "./components/player/VolumePopover.jsx";
 import RepeatMenu from "./components/player/RepeatMenu.jsx";
 import PlaybackMenu from "./components/player/PlaybackMenu.jsx";
 import { parseMediaUrl, urlsFromDrop } from "./lib/mediaSources.js";
-import { clamp } from "./lib/playerMath.js";
+import { clamp, keyboardSeekTarget } from "./lib/playerMath.js";
+import { repeatEnd, repeatStart } from "./lib/playbackRange.js";
 import { albumIdsOf, trackInAlbum } from "./lib/trackAlbums.js";
 import useDiscordStream from "./hooks/useDiscordStream.js";
 import useTabController from "./hooks/useTabController.js";
@@ -81,6 +82,7 @@ function App() {
   const [repeat, setRepeat] = useState(Boolean(saved?.repeat));
   const [libraryOpen, setLibraryOpen] = useState(saved?.libraryOpen ?? true);
   const [miniLibraryOpen, setMiniLibraryOpen] = useState(false);
+  const [videoOpen, setVideoOpen] = useState(false);
   const [volume, setVolume] = useState(
     Number.isFinite(saved?.volume) ? saved.volume : 0.8,
   );
@@ -129,8 +131,12 @@ function App() {
   const spotifyRef = useRef(null);
   const loopSeekRef = useRef(false);
   const pendingSeekRef = useRef(null);
+  const keyboardSeekRef = useRef({ activeId: null, value: 0, at: 0 });
   const seekCandidateRef = useRef(null);
   const confirmedSeekRef = useRef(null);
+  const previousTapRef = useRef({ activeId: null, at: 0 });
+  const advanceMarkerRef = useRef(null);
+  const advanceAtMarkerRef = useRef(null);
   const fileRef = useRef(null);
   const panelRef = useRef(null);
   const contentRef = useRef(null);
@@ -153,6 +159,9 @@ function App() {
   currentAlbumsRef.current = albums;
   const reportElapsed = useCallback((value) => {
     const current = Number.isFinite(value) ? value : 0;
+    const finishAt = currentTracksRef.current.find((track) => track.id === activeId)?.playNext;
+    if (advanceMarkerRef.current === activeId && Number.isFinite(finishAt) && current < finishAt - 1)
+      advanceMarkerRef.current = null;
     const recent = confirmedSeekRef.current;
     if (recent) {
       const age = performance.now() - recent.at;
@@ -201,9 +210,11 @@ function App() {
   const tabController = useTabController();
   const spotifyAuth = useSpotifyAuth();
   const selectedAlbum = albums.find((album) => album.id === selectedAlbumId);
-  const albumTracks = tracks.filter(
-    (track) => trackInAlbum(track, selectedAlbumId),
+  const albumTracks = useMemo(
+    () => tracks.filter((track) => trackInAlbum(track, selectedAlbumId)),
+    [tracks, selectedAlbumId],
   );
+  const searchableTracks = useMemo(() => tracks.filter((track) => track.kind !== 'capture'), [tracks]);
   // No ligar la canción que suena al álbum seleccionado en la interfaz.
   const active = tracks.find((track) => track.id === activeId);
   // Siguiente/anterior siguen la lista del álbum de la canción en reproducción.
@@ -217,6 +228,7 @@ function App() {
   const loopEnd = Number.isFinite(active?.loopEnd) ? active.loopEnd : null;
   const playStart = Number.isFinite(active?.playStart) ? active.playStart : null;
   const playEnd = Number.isFinite(active?.playEnd) ? active.playEnd : null;
+  const playNext = Number.isFinite(active?.playNext) ? active.playNext : null;
   const captureMode =
     live && captureRef.current?.id === activeId
       ? captureRef.current.mode
@@ -460,8 +472,12 @@ function App() {
     audio.load();
     setPlaying(false);
     pendingSeekRef.current = null;
+    keyboardSeekRef.current = { activeId: null, value: 0, at: 0 };
     seekCandidateRef.current = null;
     confirmedSeekRef.current = null;
+    advanceMarkerRef.current = null;
+    previousTapRef.current = { activeId: null, at: 0 };
+    setVideoOpen(false);
     setElapsed(0);
     setDuration(0);
     setSourceIsLive(false);
@@ -477,7 +493,7 @@ function App() {
       else return;
     } else if (track.src) {
       audio.src = track.src;
-      audio.loop = repeat && loopStart === null && loopEnd === null && playStart === null && playEnd === null;
+      audio.loop = repeat && loopStart === null && loopEnd === null && playStart === null && playEnd === null && playNext === null;
     } else return;
     const initializePosition = () => {
         if (track.kind !== 'capture' && playStart !== null && playStart > 0) audio.currentTime = playStart;
@@ -507,13 +523,20 @@ function App() {
       setDuration(Number.isFinite(total) && total > 0 ? total : 0);
       setSourceIsLive(total === Infinity);
       const current = Number.isFinite(audio.currentTime) ? audio.currentTime : 0;
-      if (playEnd !== null && current >= playEnd && !audio.paused) {
+      const cycleEnd = repeatEnd(loopEnd, playNext, playEnd, null, repeatStart(loopStart, playStart));
+      if (repeat && cycleEnd !== null && current >= cycleEnd && !audio.paused) {
+        audio.currentTime = repeatStart(loopStart, playStart);
+        reportElapsed(audio.currentTime);
+        return;
+      }
+      if (!repeat && playNext !== null && current >= playNext && !audio.paused) {
+        advanceAtMarkerRef.current?.();
+        return;
+      }
+      if (!repeat && playEnd !== null && current >= playEnd && !audio.paused) {
         audio.pause();
         setPlaying(false);
         reportElapsed(current);
-      } else if (repeat && loopEnd !== null && current >= loopEnd && !audio.paused) {
-        audio.currentTime = loopStart ?? playStart ?? 0;
-        reportElapsed(audio.currentTime);
       } else reportElapsed(current);
     };
     const stop = () => {
@@ -554,12 +577,12 @@ function App() {
       audio.removeEventListener("seeked", sync);
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [activeId, active?.kind, active?.src, repeat, loopStart, loopEnd, playStart, playEnd, reportElapsed]);
+  }, [activeId, active?.kind, active?.src, repeat, loopStart, loopEnd, playStart, playEnd, playNext, reportElapsed]);
 
   useEffect(() => {
     audioRef.current.volume = volume;
-    audioRef.current.loop = repeat && !live && loopStart === null && loopEnd === null && playStart === null && playEnd === null;
-  }, [volume, repeat, live, loopStart, loopEnd, playStart, playEnd]);
+    audioRef.current.loop = repeat && !live && loopStart === null && loopEnd === null && playStart === null && playEnd === null && playNext === null;
+  }, [volume, repeat, live, loopStart, loopEnd, playStart, playEnd, playNext]);
 
   useEffect(() => {
     if (active?.kind === "spotify") setVolumeOpen(false);
@@ -583,6 +606,15 @@ function App() {
   }, [live, tabController.error]);
 
   useEffect(() => {
+    if (!live || !tabController.connected || repeat || playNext === null) return;
+    if (tabController.elapsed < playNext - 1) {
+      if (advanceMarkerRef.current === activeId) advanceMarkerRef.current = null;
+    } else if (tabController.playing && tabController.elapsed >= playNext) {
+      advanceAtMarkerRef.current?.();
+    }
+  }, [live, activeId, tabController.connected, tabController.elapsed, tabController.playing, repeat, playNext]);
+
+  useEffect(() => {
     if (!live || !tabController.connected || !tabController.url) return;
     const markers = captureLoops()[tabController.url];
     setTracks((old) => {
@@ -590,7 +622,7 @@ function App() {
       if (!current || current.sourceUrl === tabController.url) return old;
       return old.map((track) => {
         if (track.id !== activeId) return track;
-        const { loopStart: _start, loopEnd: _end, playStart: _playStart, playEnd: _playEnd, ...rest } = track;
+        const { loopStart: _start, loopEnd: _end, playStart: _playStart, playEnd: _playEnd, playNext: _playNext, ...rest } = track;
         return { ...rest, sourceUrl: tabController.url, ...markers };
       });
     });
@@ -598,12 +630,18 @@ function App() {
 
   useEffect(() => {
     if (!live || !tabController.connected) return;
-    tabController.command('repeat', repeat);
-    tabController.command('loop', { start: loopStart, end: loopEnd });
-    tabController.command('range', { start: playStart, end: playEnd });
+    if (repeat) {
+      tabController.command('range', { start: playStart, end: null });
+      tabController.command('loop', { start: loopStart, end: repeatEnd(loopEnd, playNext, playEnd, null, repeatStart(loopStart, playStart)) });
+      tabController.command('repeat', true);
+    } else {
+      tabController.command('repeat', false);
+      tabController.command('loop', { start: loopStart, end: loopEnd });
+      tabController.command('range', { start: playStart, end: playEnd });
+    }
     // Los comandos se envían al cambiar la configuración, no en cada avance de tiempo.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [live, tabController.connected, repeat, loopStart, loopEnd, playStart, playEnd]);
+  }, [live, tabController.connected, repeat, loopStart, loopEnd, playStart, playEnd, playNext]);
 
   useEffect(() => {
     const resize = () => {
@@ -712,6 +750,14 @@ function App() {
     setView("maximized");
   };
 
+  const changeVideoVisibility = useCallback((visible) => {
+    setVideoOpen(visible);
+    if (visible) {
+      setVolumeOpen(false);
+      setView((old) => old === "minimized" ? "expanded" : old);
+    }
+  }, []);
+
   const toggleMiniLibrary = () => {
     if (!miniLibraryOpen) {
       setPosition((old) => ({
@@ -722,9 +768,10 @@ function App() {
     setMiniLibraryOpen((old) => !old);
   };
 
-  const seekActive = (value) => {
+  const seekActive = (value, origin = 'pointer') => {
+    if (origin !== 'keyboard') keyboardSeekRef.current = { activeId: null, value: 0, at: 0 };
     const next = clamp(value, 0, duration || value);
-    if (repeat && ((loopStart !== null && next < loopStart) || (loopEnd !== null && next >= loopEnd))) setRepeat(false);
+    if (playNext !== null && next < playNext - 0.5) advanceMarkerRef.current = null;
     const request = { id: crypto.randomUUID(), activeId, from: elapsed, target: next, until: performance.now() + 8000 };
     pendingSeekRef.current = request;
     seekCandidateRef.current = null;
@@ -735,6 +782,25 @@ function App() {
     else if (active?.kind === "spotify") spotifyRef.current?.seek(Math.floor(next));
     else if (audioRef.current && !live) audioRef.current.currentTime = next;
     if (discordStream.phase !== 'on') setElapsed(next);
+  };
+
+  const seekWithKeyboard = (event, visiblePosition) => {
+    if (!active || !duration || mediaIsLive || event.altKey || event.ctrlKey || event.metaKey) return;
+    const now = performance.now();
+    const previous = keyboardSeekRef.current;
+    const base = previous.activeId === activeId && now - previous.at < 2000
+      ? previous.value : visiblePosition;
+    const target = keyboardSeekTarget(event.key, base, duration, event.shiftKey);
+    if (target === null) return;
+    event.preventDefault();
+    keyboardSeekRef.current = { activeId, value: target, at: now };
+    seekActive(target, 'keyboard');
+  };
+
+  const handlePlayerKeyDown = (event) => {
+    if (event.defaultPrevented || !['ArrowLeft', 'ArrowRight', 'PageUp', 'PageDown', 'Home', 'End'].includes(event.key)) return;
+    if (event.target.closest('input, textarea, select, [contenteditable], .playlist, .album-toolbar, .track-context-menu, .repeat-menu, .playback-menu')) return;
+    seekWithKeyboard(event, discordTimeline.pendingTarget ?? discordTimeline.position);
   };
 
   const setLoopMarker = (kind, value) => {
@@ -778,22 +844,35 @@ function App() {
     if (!editorKey && !live) return setMessage('Se necesita una invitación para editar esta canción.');
     if (!active || !duration || mediaIsLive) return;
     const next = kind === 'playStart'
-      ? clamp(value, 0, (playEnd ?? duration) - 0.25)
+      ? clamp(value, 0, (playNext ?? playEnd ?? duration) - 0.25)
       : clamp(value, (playStart ?? 0) + 0.25, duration);
-    setTracks((old) => old.map((track) => track.id === active.id ? { ...track, [kind]: next } : track));
-    if (live) saveCaptureLoop(tabController.url, { ...captureLoops()[tabController.url], [kind]: next });
+    advanceMarkerRef.current = null;
+    setTracks((old) => old.map((track) => {
+      if (track.id !== active.id) return track;
+      const updated = { ...track, [kind]: next };
+      if (kind === 'playEnd') delete updated.playNext;
+      if (kind === 'playNext') delete updated.playEnd;
+      return updated;
+    }));
+    if (live) {
+      const updated = { ...captureLoops()[tabController.url], [kind]: next };
+      if (kind === 'playEnd') delete updated.playNext;
+      if (kind === 'playNext') delete updated.playEnd;
+      saveCaptureLoop(tabController.url, updated);
+    }
   };
 
   const clearPlayMarkers = () => {
     if (!editorKey && !live) return setMessage('Se necesita una invitación para editar esta canción.');
     if (!active) return;
+    advanceMarkerRef.current = null;
     if (live) {
-      const { playStart: _start, playEnd: _end, ...rest } = captureLoops()[tabController.url] || {};
+      const { playStart: _start, playEnd: _end, playNext: _next, ...rest } = captureLoops()[tabController.url] || {};
       saveCaptureLoop(tabController.url, Object.keys(rest).length ? rest : null);
     }
     setTracks((old) => old.map((track) => {
       if (track.id !== active.id) return track;
-      const { playStart: _start, playEnd: _end, ...rest } = track;
+      const { playStart: _start, playEnd: _end, playNext: _next, ...rest } = track;
       return rest;
     }));
     setPlaybackMenu(null);
@@ -804,7 +883,7 @@ function App() {
     if (!active || mediaIsLive) return;
     setPlaybackMenu({
       left: clamp(event.clientX, 8, window.innerWidth - 218),
-      top: clamp(event.clientY, 8, window.innerHeight - 146),
+      top: clamp(event.clientY, 8, window.innerHeight - 188),
     });
   };
 
@@ -842,6 +921,8 @@ function App() {
 
   const togglePlay = async () => {
     if (!canControlPlayback) return;
+    const restartAt = repeat ? repeatStart(loopStart, playStart) : playStart ?? 0;
+    const finishAt = repeat ? repeatEnd(loopEnd, playNext, playEnd, duration || null, restartAt) : playNext ?? playEnd;
     if (live && tabController.connected) {
       tabController.command('toggle');
       return;
@@ -862,8 +943,8 @@ function App() {
           autoPlayRef.current = false;
         } else {
           const current = youtubeRef.current.getCurrentTime();
-          if ((playStart !== null && current < playStart - 0.25) || (playEnd !== null && current >= playEnd - 0.25))
-            youtubeRef.current.seekTo(playStart ?? 0, true);
+          if ((restartAt > 0 && current < restartAt - 0.25) || (finishAt !== null && current >= finishAt - 0.25))
+            youtubeRef.current.seekTo(restartAt, true);
           youtubeRef.current.playVideo();
           autoPlayRef.current = true;
         }
@@ -876,8 +957,8 @@ function App() {
       if (!spotifyRef.current) return setMessage("Spotify aún se está cargando. También puedes usar el botón del recuadro de Spotify.");
       if (playing) spotifyRef.current.pause();
       else {
-        if ((playStart !== null && elapsed < playStart - 0.25) || (playEnd !== null && elapsed >= playEnd - 0.25))
-          spotifyRef.current.seek(Math.floor(playStart ?? 0));
+        if ((restartAt > 0 && elapsed < restartAt - 0.25) || (finishAt !== null && elapsed >= finishAt - 0.25))
+          spotifyRef.current.seek(Math.floor(restartAt));
         spotifyRef.current.play();
       }
       autoPlayRef.current = !playing;
@@ -891,8 +972,8 @@ function App() {
       return;
     }
     try {
-      if ((playStart !== null && audio.currentTime < playStart - 0.25) || (playEnd !== null && audio.currentTime >= playEnd - 0.25))
-        audio.currentTime = playStart ?? 0;
+      if ((restartAt > 0 && audio.currentTime < restartAt - 0.25) || (finishAt !== null && audio.currentTime >= finishAt - 0.25))
+        audio.currentTime = restartAt;
       await audio.play();
       autoPlayRef.current = true;
       setPlaying(true);
@@ -905,16 +986,21 @@ function App() {
   };
 
   const choose = (id) => {
+    const next = tracks.find((item) => item.id === id);
+    if (!next) return;
+    const songAlbumId = trackInAlbum(next, selectedAlbumId)
+      ? selectedAlbumId
+      : albumIdsOf(next).find((albumId) => albums.some((album) => album.id === albumId));
+    if (songAlbumId) {
+      setSelectedAlbumId(songAlbumId);
+      setPlaybackAlbumId(songAlbumId);
+    }
     if (id === activeId) {
-      setPlaybackAlbumId(selectedAlbumId);
       if (!playing) togglePlay();
       return;
     }
-    const next = albumTracks.find((item) => item.id === id);
-    if (!next) return;
     // Cambiar de pista no expande el reproductor.
     autoPlayRef.current = true;
-    setPlaybackAlbumId(selectedAlbumId);
     setActiveId(next.id);
   };
 
@@ -969,6 +1055,9 @@ function App() {
     const index = playbackTracks.findIndex((item) => item.id === activeId);
     if (automatic && (index < 0 || index === playbackTracks.length - 1)) {
       autoPlayRef.current = false;
+      audioRef.current?.pause();
+      youtubeRef.current?.pauseVideo();
+      spotifyRef.current?.pause();
       setPlaying(false);
       return;
     }
@@ -983,14 +1072,37 @@ function App() {
     setActiveId(next.id);
   };
 
+  advanceAtMarkerRef.current = () => {
+    if (repeat) return;
+    if (advanceMarkerRef.current === activeId) return;
+    advanceMarkerRef.current = activeId;
+    step(1, true);
+  };
+
+  const previousOrRestart = () => {
+    if (!active) return;
+    if (live && (!tabController.connected || !duration)) {
+      setMessage('Conecta una pestaña con línea de tiempo desde la extensión Bardo para reiniciar la canción.');
+      return;
+    }
+    if (!live && !duration) return;
+    const now = performance.now();
+    const doubleTap = previousTapRef.current.activeId === activeId && now - previousTapRef.current.at <= 1500;
+    previousTapRef.current = { activeId, at: doubleTap ? 0 : now };
+    if (doubleTap && (live || playbackTracks.length > 1)) step(-1);
+    else seekActive(playStart ?? 0);
+  };
+
   const minimizePlayer = () => {
     // Nunca llamar a pauseVideo ni desmontar YouTubePlayer aquí.
+    setVideoOpen(false);
     setVolumeOpen(false);
     setMiniLibraryOpen(false);
     setView("minimized");
   };
 
   const closePlayer = () => {
+    setVideoOpen(false);
     discordStream.stop();
     audioRef.current?.pause();
     if (active?.kind === "youtube") youtubeRef.current?.pauseVideo();
@@ -1512,29 +1624,30 @@ function App() {
             maxHeight: "calc(100svh - " + (position.y + 12) + "px)",
           }}
           aria-label="Reproductor de música"
+          onKeyDown={handlePlayerKeyDown}
         >
           <PlayerWindowHeader minimized={view === "minimized"} maximized={view === "maximized"} onDragStart={dragStart} onDragMove={dragMove} onDragEnd={() => { dragRef.current = null; }} onExpand={expandPlayer} onMaximize={maximizePlayer} onMinimize={minimizePlayer} onClose={closePlayer} />
 
           {view === "minimized" && <>
-            <MiniPlayer active={active} live={live} tabConnected={tabController.connected} captureMode={captureMode} playing={playing} canControlPlayback={canControlPlayback} playbackCount={playbackTracks.length} volume={volume} volumeOpen={volumeOpen} volumeButtonRef={volumeButtonRef} repeat={repeat} libraryOpen={miniLibraryOpen} message={message} onStep={step} onPlay={togglePlay} onPlayMenu={openPlaybackMenu} onVolumeToggle={() => setVolumeOpen((old) => !old)} onRepeatToggle={() => setRepeat((old) => !old)} onRepeatMenu={openRepeatMenu} onOpenLibrary={toggleMiniLibrary} onDismissMessage={() => setMessage("")} />
-            {miniLibraryOpen && <MiniLibrary albums={albums} selectedAlbumId={selectedAlbumId} selectedAlbum={selectedAlbum} albumTracks={albumTracks} activeId={activeId} playing={playing} captureMode={captureMode} onSwitchAlbum={switchAlbum} onCreateAlbum={openCreateAlbum} onEditAlbum={openEditAlbum} onChooseTrack={choose} onEditTrack={edit} onRemoveTrack={remove} onReorderTrack={moveTrack} onAddMusic={openAddMusic} />}
+            <MiniPlayer active={active} live={live} tabConnected={tabController.connected} captureMode={captureMode} playing={playing} canControlPlayback={canControlPlayback} playbackCount={playbackTracks.length} volume={volume} volumeOpen={volumeOpen} volumeButtonRef={volumeButtonRef} repeat={repeat} libraryOpen={miniLibraryOpen} message={message} onPrevious={previousOrRestart} onStep={step} onPlay={togglePlay} onPlayMenu={openPlaybackMenu} onVolumeToggle={() => setVolumeOpen((old) => !old)} onRepeatToggle={() => setRepeat((old) => !old)} onRepeatMenu={openRepeatMenu} onOpenLibrary={toggleMiniLibrary} onShowVideo={() => changeVideoVisibility(true)} onDismissMessage={() => setMessage("")} />
+            {miniLibraryOpen && <MiniLibrary albums={albums} selectedAlbumId={selectedAlbumId} selectedAlbum={selectedAlbum} albumTracks={albumTracks} allTracks={searchableTracks} activeId={activeId} playing={playing} captureMode={captureMode} onSwitchAlbum={switchAlbum} onCreateAlbum={openCreateAlbum} onEditAlbum={openEditAlbum} onChooseTrack={choose} onEditTrack={edit} onRemoveTrack={remove} onReorderTrack={moveTrack} onAddMusic={openAddMusic} />}
           </>}
 
           {/* Mantenemos el contenido montado al minimizar: el iframe no se reinicia. */}
           <div
             ref={contentRef}
-            className="player-content"
+            className={videoOpen ? "player-content player-content--video" : "player-content"}
             aria-hidden={view === "minimized"}
             inert={view === "minimized"}
           >
-            <div className="playback-area"><PlaybackSource active={active} live={live} captureMode={captureMode} tabConnected={tabController.connected} spotifyAuth={spotifyAuth} sourceIsLive={sourceIsLive} volume={volume} startAt={pendingSeekRef.current?.activeId === activeId ? pendingSeekRef.current.target : playStart ?? 0} autoPlayRef={autoPlayRef} youtubeRef={youtubeRef} spotifyRef={spotifyRef} repeat={repeat} loopStart={loopStart} loopEnd={loopEnd} playEnd={playEnd} playing={playing} loopSeekRef={loopSeekRef} onPlaying={setPlaying} onElapsed={reportElapsed} onDuration={setDuration} onStep={step} onMessage={setMessage} />
+            <div className={videoOpen ? "playback-area playback-area--video" : "playback-area"}><PlaybackSource active={active} live={live} captureMode={captureMode} tabConnected={tabController.connected} spotifyAuth={spotifyAuth} sourceIsLive={sourceIsLive} volume={volume} startAt={pendingSeekRef.current?.activeId === activeId ? pendingSeekRef.current.target : playStart ?? 0} autoPlayRef={autoPlayRef} youtubeRef={youtubeRef} spotifyRef={spotifyRef} repeat={repeat} loopStart={loopStart} loopEnd={loopEnd} playEnd={playEnd} playNext={playNext} playing={playing} maximized={view === "maximized"} videoOpen={videoOpen} onVideoVisibility={changeVideoVisibility} loopSeekRef={loopSeekRef} onPlaying={setPlaying} onElapsed={reportElapsed} onDuration={setDuration} onStep={step} onAdvance={() => advanceAtMarkerRef.current?.()} onMessage={setMessage} />
 
-            <PlaybackTimeline active={active} mediaIsLive={mediaIsLive} duration={duration} elapsed={discordTimeline.position} pendingSeek={discordTimeline.pendingTarget} discordDelayed={discordStream.phase === 'on'} discordPlaying={Boolean(botTimeline.streaming)} loopStart={loopStart} loopEnd={loopEnd} playStart={playStart} playEnd={playEnd} onSeek={seekActive} onSetLoopMarker={setLoopMarker} onSetPlayMarker={setPlayMarker} />
+            <PlaybackTimeline active={active} mediaIsLive={mediaIsLive} duration={duration} elapsed={discordTimeline.position} pendingSeek={discordTimeline.pendingTarget} discordDelayed={discordStream.phase === 'on'} discordPlaying={Boolean(botTimeline.streaming)} loopStart={loopStart} loopEnd={loopEnd} playStart={playStart} playEnd={playEnd} playNext={playNext} onSeek={seekActive} onKeyboardSeek={seekWithKeyboard} onSetLoopMarker={setLoopMarker} onSetPlayMarker={setPlayMarker} />
 
-            <TransportControls active={active} live={live} tabConnected={tabController.connected} captureMode={captureMode} canControlPlayback={canControlPlayback} playbackCount={playbackTracks.length} playing={playing} repeat={repeat} volume={volume} volumeOpen={volumeOpen} volumeButtonRef={volumeButtonRef} minimized={view === "minimized"} libraryOpen={libraryOpen} onStep={step} onPlay={togglePlay} onPlayMenu={openPlaybackMenu} onRepeatToggle={() => setRepeat((old) => !old)} onRepeatMenu={openRepeatMenu} onVolumeToggle={() => setVolumeOpen((old) => !old)} onLibraryToggle={() => setLibraryOpen((old) => !old)} /></div>
+            <TransportControls active={active} live={live} tabConnected={tabController.connected} captureMode={captureMode} canControlPlayback={canControlPlayback} playbackCount={playbackTracks.length} playing={playing} repeat={repeat} volume={volume} volumeOpen={volumeOpen} volumeButtonRef={volumeButtonRef} minimized={view === "minimized"} libraryOpen={libraryOpen} onPrevious={previousOrRestart} onStep={step} onPlay={togglePlay} onPlayMenu={openPlaybackMenu} onRepeatToggle={() => setRepeat((old) => !old)} onRepeatMenu={openRepeatMenu} onVolumeToggle={() => setVolumeOpen((old) => !old)} onLibraryToggle={() => setLibraryOpen((old) => !old)} /></div>
 
             {libraryOpen && view !== "minimized" && <>
-              <div className="library-area"><Suspense fallback={<p className="source-loading" role="status">Cargando biblioteca…</p>}><LibraryPanel albums={albums} selectedAlbumId={selectedAlbumId} selectedAlbum={selectedAlbum} albumTracks={albumTracks} activeId={activeId} playing={playing} captureMode={captureMode} message={message} onSwitchAlbum={switchAlbum} onCreateAlbum={openCreateAlbum} onEditAlbum={openEditAlbum} onShareTab={shareTab} onChooseTrack={choose} onEditTrack={edit} onRemoveTrack={remove} onReorderTrack={moveTrack} onAddMusic={openAddMusic} onDismissMessage={() => setMessage("")} /></Suspense></div>
+              <div className="library-area"><Suspense fallback={<p className="source-loading" role="status">Cargando biblioteca…</p>}><LibraryPanel albums={albums} selectedAlbumId={selectedAlbumId} selectedAlbum={selectedAlbum} albumTracks={albumTracks} allTracks={searchableTracks} activeId={activeId} playing={playing} captureMode={captureMode} message={message} onSwitchAlbum={switchAlbum} onCreateAlbum={openCreateAlbum} onEditAlbum={openEditAlbum} onShareTab={shareTab} onChooseTrack={choose} onEditTrack={edit} onRemoveTrack={remove} onReorderTrack={moveTrack} onAddMusic={openAddMusic} onDismissMessage={() => setMessage("")} /></Suspense></div>
               <div className="services-area"><Suspense fallback={null}><PlayerServices discordStream={discordStream} editorKey={editorKey} accessRole={accessRole} maximized={view === "maximized"} /></Suspense></div>
             </>}
           </div>
@@ -1544,7 +1657,7 @@ function App() {
       <VolumePopover open={volumeOpen} position={volumePosition} popoverRef={volumePopoverRef} volume={volume} onChange={setVolume} />
 
       <RepeatMenu position={repeatMenu} duration={duration} elapsed={elapsed} loopStart={loopStart} loopEnd={loopEnd} onSetMarker={setLoopMarker} onClear={clearLoopMarkers} onClose={() => setRepeatMenu(null)} />
-      <PlaybackMenu position={playbackMenu} duration={duration} elapsed={elapsed} playStart={playStart} playEnd={playEnd} onSetMarker={setPlayMarker} onClear={clearPlayMarkers} onClose={() => setPlaybackMenu(null)} />
+      <PlaybackMenu position={playbackMenu} duration={duration} elapsed={elapsed} playStart={playStart} playEnd={playEnd} playNext={playNext} onSetMarker={setPlayMarker} onClear={clearPlayMarkers} onClose={() => setPlaybackMenu(null)} />
 
       {modal && <Suspense fallback={null}><MusicModal modal={modal} albumName={albumName} onAlbumNameChange={setAlbumName} editingTrack={editingTrack} albums={albums} editingAlbumIds={editingAlbumIds} onEditingAlbumIdsChange={setEditingAlbumIds} url={url} onUrlChange={setUrl} title={title} onTitleChange={setTitle} message={message} onClearMessage={() => setMessage("")} onClose={() => setModal(null)} onCreateAlbum={createAlbum} onRenameAlbum={renameAlbum} onDeleteAlbum={deleteAlbum} onAddLink={addLink} onSaveEdit={saveEdit} onUploadClick={() => fileRef.current.click()} onShareTab={shareTab} /></Suspense>}
 
@@ -1563,11 +1676,14 @@ function App() {
         ref={audioRef}
         preload="metadata"
         onEnded={() => {
-          if (playEnd !== null) { setPlaying(false); return; }
           if (repeat) {
-            seekActive(loopStart ?? playStart ?? 0);
+            seekActive(repeatStart(loopStart, playStart));
             audioRef.current.play().catch(() => setPlaying(false));
-          } else step(1, true);
+          } else if (playEnd !== null) {
+            setPlaying(false);
+          } else {
+            step(1, true);
+          }
         }}
         onError={() => {
           if (active && !["capture", "youtube", "spotify"].includes(active.kind))

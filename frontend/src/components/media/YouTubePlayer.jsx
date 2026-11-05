@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import Icon from '../ui/Icon.jsx';
 
 let apiPromise;
 function loadYouTubeApi() {
@@ -32,6 +33,10 @@ function loadYouTubeApi() {
 export default function YouTubePlayer({
   videoId,
   volume,
+  maximized,
+  sourceUrl,
+  videoOpen,
+  onVideoVisibility,
   autoPlayRef,
   startAt,
   playerRef,
@@ -40,7 +45,6 @@ export default function YouTubePlayer({
   onError,
 }) {
   const hostRef = useRef(null);
-  const [showVideo, setShowVideo] = useState(false);
   const [stalled, setStalled] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const latest = useRef({
@@ -149,9 +153,23 @@ export default function YouTubePlayer({
     }
   }, [volume, playerRef]);
 
+  const videoVisible = videoOpen;
+  const closeVideo = () => onVideoVisibility(false);
+  useEffect(() => {
+    if (!videoVisible) return undefined;
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') closeVideo();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [videoVisible, onVideoVisibility]);
   return <>
-    {stalled && !showVideo && <button type="button" className="youtube-reveal" onClick={() => { setShowVideo(true); setStalled(false); setAttempt((value) => value + 1); }}>Mostrar video para intentar reproducir</button>}
-    <div className={showVideo ? 'youtube-frame' : 'youtube-frame youtube-frame--tiny'}>
+    {stalled && !videoVisible && <button type="button" className="youtube-reveal" onClick={() => { onVideoVisibility(true); setStalled(false); setAttempt((value) => value + 1); }}>Mostrar video para intentar reproducir</button>}
+    <div className="youtube-source-actions">
+      <button type="button" className="youtube-video-toggle" aria-label={videoVisible ? 'Ocultar video' : 'Mostrar video'} aria-pressed={videoVisible} title={videoVisible ? 'Ocultar video' : 'Mostrar video'} onClick={() => onVideoVisibility(!videoVisible)}><Icon name={videoVisible ? 'videoOff' : 'video'} size={17} />{maximized && <span>{videoVisible ? 'Ocultar video' : 'Mostrar video'}</span>}</button>
+      <a className="youtube-open" href={sourceUrl} target="_blank" rel="noopener noreferrer">Abrir en YouTube ↗</a>
+    </div>
+    <div className={videoVisible ? 'youtube-frame youtube-frame--inline' : 'youtube-frame youtube-frame--tiny'}>
       <div ref={hostRef} />
     </div>
   </>;

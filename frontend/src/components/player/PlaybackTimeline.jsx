@@ -1,17 +1,20 @@
 import { useRef, useState } from 'react';
 import { clamp, time } from '../../lib/playerMath.js';
 
-export default function PlaybackTimeline({ active, mediaIsLive, duration, elapsed, pendingSeek, discordDelayed, discordPlaying, loopStart, loopEnd, playStart, playEnd, onSeek, onSetLoopMarker, onSetPlayMarker }) {
+export default function PlaybackTimeline({ active, mediaIsLive, duration, elapsed, pendingSeek, discordDelayed, discordPlaying, loopStart, loopEnd, playStart, playEnd, playNext, onSeek, onKeyboardSeek, onSetLoopMarker, onSetPlayMarker }) {
   const timelineRef = useRef(null);
   const markerDragRef = useRef(null);
   const scrubbingRef = useRef(false);
-  const scrubValueRef = useRef(null);
-  const ignoreTrailingChangeRef = useRef(0);
   const [scrub, setScrub] = useState(null);
   const scrubPosition = scrub?.activeId === active?.id ? scrub.position : null;
   // El punto principal sigue la posición solicitada. La marca secundaria
   // conserva la posición que el bot todavía está terminando de emitir.
   const shownElapsed = scrubPosition ?? pendingSeek ?? elapsed;
+  const playFinish = playNext ?? playEnd;
+  const positionAt = (clientX) => {
+    const rect = timelineRef.current?.getBoundingClientRect();
+    return rect?.width ? clamp((clientX - rect.left) / rect.width, 0, 1) * duration : shownElapsed;
+  };
 
   return (
     <div className="timeline">
@@ -23,11 +26,12 @@ export default function PlaybackTimeline({ active, mediaIsLive, duration, elapse
             {(loopStart !== null || loopEnd !== null) && duration > 0 && (
               <div className="loop-region" style={{ left: ((loopStart ?? 0) / duration * 100) + '%', right: (100 - (loopEnd ?? duration) / duration * 100) + '%' }} />
             )}
-            {(playStart !== null || playEnd !== null) && duration > 0 && (
-              <div className="playback-region" style={{ left: ((playStart ?? 0) / duration * 100) + '%', right: (100 - (playEnd ?? duration) / duration * 100) + '%' }} />
+            {playStart !== null && playFinish !== null && duration > 0 && (
+              <div className={'playback-region' + (playNext !== null ? ' playback-region--next' : '')} style={{ left: (playStart / duration * 100) + '%', right: (100 - playFinish / duration * 100) + '%' }} />
             )}
             <input
               aria-label="Posición de la canción"
+              title="Flechas: 1 segundo · Mayús + flechas: 10 segundos · Inicio/Fin: extremos"
               type="range"
               min="0"
               max={duration || 1}
@@ -36,36 +40,29 @@ export default function PlaybackTimeline({ active, mediaIsLive, duration, elapse
               disabled={!active || !duration}
               onPointerDown={(event) => {
                 scrubbingRef.current = true;
-                scrubValueRef.current = null;
-                ignoreTrailingChangeRef.current = 0;
                 event.currentTarget.setPointerCapture(event.pointerId);
+                setScrub({ activeId: active?.id, position: positionAt(event.clientX) });
+              }}
+              onPointerMove={(event) => {
+                if (scrubbingRef.current)
+                  setScrub({ activeId: active?.id, position: positionAt(event.clientX) });
               }}
               onPointerUp={(event) => {
                 if (!scrubbingRef.current) return;
                 scrubbingRef.current = false;
-                const rect = event.currentTarget.getBoundingClientRect();
-                const nativeValue = Number(event.currentTarget.value);
-                const target = scrubValueRef.current ?? (Math.abs(nativeValue - shownElapsed) > 0.01
-                  ? nativeValue
-                  : rect.width ? clamp((event.clientX - rect.left) / rect.width, 0, 1) * duration : nativeValue);
-                scrubValueRef.current = null;
-                // Algunos navegadores emiten un último change después de pointerup.
-                // Ese evento puede contener el valor anterior del control gobernado
-                // por React y enviaría un segundo salto hacia atrás.
-                ignoreTrailingChangeRef.current = performance.now() + 300;
+                const target = positionAt(event.clientX);
                 setScrub(null);
                 onSeek(target);
               }}
-              onPointerCancel={() => { scrubbingRef.current = false; scrubValueRef.current = null; ignoreTrailingChangeRef.current = performance.now() + 300; setScrub(null); }}
-              onChange={(event) => {
-                const target = Number(event.target.value);
-                if (scrubbingRef.current) {
-                  scrubValueRef.current = target;
-                  setScrub({ activeId: active?.id, position: target });
-                }
-                else if (performance.now() >= ignoreTrailingChangeRef.current) onSeek(target);
+              onPointerCancel={() => { scrubbingRef.current = false; setScrub(null); }}
+              onChange={() => {
+                // El valor nativo puede llegar después de pointerup y contener
+                // la posición anterior. Los saltos se confirman solo al soltar.
               }}
-              onKeyDown={() => { ignoreTrailingChangeRef.current = 0; }}
+              onKeyDown={(event) => {
+                if (!duration || !active) return;
+                onKeyboardSeek(event, shownElapsed);
+              }}
               style={{ '--range-progress': (duration ? clamp((shownElapsed / duration) * 100, 0, 100) : 0) + '%' }}
             />
             {pendingSeek !== null && duration > 0 && scrubPosition === null && (
@@ -75,7 +72,8 @@ export default function PlaybackTimeline({ active, mediaIsLive, duration, elapse
               ['loopStart', loopStart, 'Inicio de repetición', onSetLoopMarker],
               ['loopEnd', loopEnd, 'Fin de repetición', onSetLoopMarker],
               ['playStart', playStart, 'Inicio de reproducción', onSetPlayMarker],
-              ['playEnd', playEnd, 'Término de reproducción', onSetPlayMarker],
+              ['playEnd', playEnd, 'Pausar reproducción', onSetPlayMarker],
+              ['playNext', playNext, 'Pasar a la siguiente canción', onSetPlayMarker],
             ]).map(([kind, value, label, onMove]) => value !== null && (
               <button
                 key={kind}

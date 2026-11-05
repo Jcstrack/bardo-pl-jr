@@ -35,16 +35,19 @@
       chrome.runtime.sendMessage({ type: 'BARDO_SOURCE_STATE', state: current }).catch(() => {});
     }
     const item = media();
-    if (item && playEnd !== null && !item.paused && item.currentTime >= playEnd) {
-      item.pause();
-      publish(true);
+    if (!item) return;
+    if (repeat) {
+      if (!Number.isFinite(item.duration) || !item.duration || item.paused) return;
+      const end = loopEnd ?? item.duration;
+      if (item.currentTime >= end - 0.35) {
+        item.currentTime = loopStart ?? playStart ?? 0;
+        item.play().catch(() => {});
+      }
       return;
     }
-    if (!item || !repeat || !Number.isFinite(item.duration) || !item.duration || item.paused) return;
-    const end = loopEnd ?? item.duration;
-    if (item.currentTime >= end - 0.15) {
-      item.currentTime = loopStart ?? playStart ?? 0;
-      item.play().catch(() => {});
+    if (playEnd !== null && !item.paused && item.currentTime >= playEnd) {
+      item.pause();
+      publish(true);
     }
   }
 
@@ -95,6 +98,7 @@
   document.addEventListener('play', () => publish(true), true);
   document.addEventListener('pause', () => publish(true), true);
   document.addEventListener('loadedmetadata', () => publish(true), true);
+  document.addEventListener('timeupdate', () => publish(), true);
   setInterval(publish, 400);
   publish(true);
 })();
