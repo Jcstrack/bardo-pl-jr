@@ -1,0 +1,26 @@
+{
+  "name": "bardo-politanense-jr-bot",
+  "version": "1.0.0",
+  "description": "Bardo Politanense JR, bot musical de Discord conectado a Sonora",
+  "private": true,
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "dev": "node --watch src/index.js",
+    "start": "node src/index.js"
+  },
+  "keywords": [
+    "discord",
+    "music",
+    "sonora"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@discordjs/voice": "^0.19.2",
+    "discord.js": "^14.28.0",
+    "dotenv": "^18.0.9",
+    "libsodium-wrappers": "^0.8.4",
+    "ws": "^8.22.1"
+  }
+}

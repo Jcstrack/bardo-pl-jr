@@ -1,0 +1,8 @@
+services:
+  quick-tunnel:
+    image: cloudflare/cloudflared:latest
+    command: ["tunnel", "--url", "http://frontend:80"]
+    depends_on:
+      frontend:
+        condition: service_healthy
+    restart: "no"

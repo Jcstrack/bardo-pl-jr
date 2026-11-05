@@ -1,0 +1,59 @@
+name: bardo-politanense-jr
+services:
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      additional_contexts:
+        proxy: ./proxy
+      args:
+        VITE_SPOTIFY_CLIENT_ID: ${VITE_SPOTIFY_CLIENT_ID:-}
+    image: bardo-politanense-jr/frontend:local
+    ports:
+      - "127.0.0.1:${BARDO_PORT:-8088}:80"
+      - "127.0.0.1:5173:80"
+    depends_on:
+      bot:
+        condition: service_healthy
+      library:
+        condition: service_healthy
+    restart: unless-stopped
+
+  bot:
+    build:
+      context: ./bot
+      dockerfile: Dockerfile
+    image: bardo-politanense-jr/bot:local
+    environment:
+      BOT_HOST: 0.0.0.0
+      BOT_PORT: 3001
+      DISCORD_TOKEN_FILE: /run/secrets/discord_bot_token
+    secrets:
+      - discord_bot_token
+    restart: unless-stopped
+
+  library:
+    build:
+      context: ./library
+      dockerfile: Dockerfile
+    image: bardo-politanense-jr/library:local
+    ports:
+      - "127.0.0.1:3002:3002"
+      - "127.0.0.1:3003:3003"
+    environment:
+      LIBRARY_PORT: 3002
+      LIBRARY_OWNER_PORT: 3003
+      LIBRARY_DATA_DIR: /data
+      LIBRARY_EDITOR_KEY_FILE: /run/secrets/library_editor_key
+      BARDO_PUBLIC_URL: ${BARDO_PUBLIC_URL:-}
+    volumes:
+      - ${LIBRARY_DATA_DIR:-./data}:/data
+    secrets:
+      - library_editor_key
+    restart: unless-stopped
+
+secrets:
+  discord_bot_token:
+    file: ${BOT_TOKEN_FILE}
+  library_editor_key:
+    file: ${LIBRARY_EDITOR_KEY_FILE}
