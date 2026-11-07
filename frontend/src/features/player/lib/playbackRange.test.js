@@ -5,6 +5,7 @@ import { repeatStart, repeatEnd } from './playbackRange.js';
 test('repetir usa el tramo de repetición antes que la marca de siguiente', () => {
   assert.equal(repeatEnd(45, 30, null, 120), 45);
   assert.equal(repeatStart(12, 5), 12);
+  assert.equal(repeatStart(5, 12), 12);
 });
 
 test('sin fin de repetición, la marca de siguiente o pausa cierra el ciclo', () => {

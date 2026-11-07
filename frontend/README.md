@@ -1,4 +1,4 @@
-# Bardo Politanense JR · Reproductor flotante en React
+# Bardo Politanense · Reproductor flotante en React
 
 ## Estructura de `src`
 

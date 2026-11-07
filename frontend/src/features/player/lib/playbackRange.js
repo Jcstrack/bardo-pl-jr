@@ -1,5 +1,5 @@
 export function repeatStart(loopStart, playStart) {
-  return loopStart ?? playStart ?? 0;
+  return Math.max(0, loopStart ?? 0, playStart ?? 0);
 }
 
 export function repeatEnd(loopEnd, playNext, playEnd, duration = null, start = 0) {

@@ -71,3 +71,8 @@ Thumbs.db
 *.key
 *.p12
 *.pfx
+
+# Instalador autogenerado de la extensión
+tools/extension-installer/Assets/extension.zip
+tools/extension-installer/bin/
+tools/extension-installer/obj/

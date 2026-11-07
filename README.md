@@ -1,4 +1,4 @@
-# Bardo Politanense JR
+# Bardo Politanense
 
 Reproductor flotante en React con álbumes compartidos y salida opcional a un bot de Discord. La música subida se guarda en este ordenador. [INFORME.md](INFORME.md) describe la arquitectura y sus límites.
 
@@ -32,11 +32,11 @@ Inicia el enlace temporal:
 ./tools/Start-QuickTunnel.ps1
 ```
 
-En el reproductor abre **Canciones → Compartir biblioteca → Generar invitación → Copiar** y envía **ese enlace completo** a tu amigo. Al abrirlo, Bardo activa su acceso automáticamente, incluso si pega la invitación en una pestaña donde Bardo ya estaba abierto; no hay correo ni PIN. El catálogo se lee de la misma base de datos y ambos pueden agregar, editar y quitar canciones y álbumes. En Brave, la extensión solo hace falta para controlar otra pestaña: se entrega por separado.
+En el reproductor abre **Canciones → Compartir biblioteca → Crear invitación**. Ponle un nombre, elige duración y marca si esa persona puede agregar, editar o eliminar música; escuchar siempre está permitido. Copia **el enlace completo**. Al abrirlo, Bardo activa su acceso automáticamente, sin correo ni PIN. En **Mis enlaces** puedes copiarlo otra vez, cambiar vencimiento y permisos o darlo de baja. Solo el anfitrión ve esa lista. En Brave, la extensión solo hace falta para controlar otra pestaña: se entrega por separado.
 
 El túnel escribe su dirección actual en un volumen privado de Docker y la API la lee al mostrar o generar la invitación. No hace falta copiar la URL a `.env` ni reiniciar la biblioteca cuando Cloudflare cambia la dirección. Si el túnel se detiene, el botón espera a que exista una dirección nueva.
 
-El enlace completo es una credencial: quien lo reciba también podrá entrar. Guárdalo solo para tu amigo. Detén el túnel con `./tools/Stop-QuickTunnel.ps1`. Cuando lo reinicies, la dirección cambiará y deberás copiar una invitación nueva desde el botón. Cloudflare Quick Tunnels no ofrece URL fija ni garantía de disponibilidad; para una dirección permanente hará falta configurar un dominio. [Documentación de Cloudflare](https://developers.cloudflare.com/tunnel/get-started/quick-tunnels/).
+El enlace completo es una credencial: quien lo reciba también podrá entrar. Guárdalo solo para tu amigo. Detén el túnel con `./tools/Stop-QuickTunnel.ps1`. Cuando lo reinicies, la dirección cambiará; abre **Mis enlaces** y copia la invitación con la dirección actual. Cloudflare Quick Tunnels no ofrece URL fija ni garantía de disponibilidad; para una dirección permanente hará falta configurar un dominio. [Documentación de Cloudflare](https://developers.cloudflare.com/tunnel/get-started/quick-tunnels/).
 
 ### Importar las canciones que ya tenías
 
@@ -50,16 +50,20 @@ La base principal es `C:\Users\juaul\Documents\Codex\bardo-data\library.sqlite`.
 
 La API permite consultar, crear, actualizar y eliminar álbumes y canciones mediante `/api/library/albums`, `/api/library/albums/:id`, `/api/library/tracks` y `/api/library/tracks/:id`. Las operaciones necesitan una sesión de propietario o invitado. La interfaz conserva `/api/library/sync` para aplicar cambios y ordenaciones en un solo paso. Consulta [library/README.md](library/README.md) para los cuerpos JSON y las respuestas.
 
-### Extensión de Brave
+### Extensión del navegador
 
-Entrega a tu amigo [Bardo-Extension-0.2.3.zip](../Bardo-Extension-Instalador/Bardo-Extension-0.2.3.zip) desde `C:\Users\juaul\OneDrive\Escritorio\PROYECTO\POLITANIA\Bardo-Extension-Instalador`. Debe extraer el ZIP y seguir `LEEME.md` para cargar la carpeta `extension` desde `brave://extensions/`. Brave requiere esa confirmación dentro del navegador. La extensión reconoce la dirección HTTPS temporal de Bardo y permite controlar la pestaña que el usuario conecte.
+Entrega a tu amigo [Instalar-Bardo-Extension.exe](../Bardo-Extension-Instalador/Instalar-Bardo-Extension.exe) desde `C:\Users\juaul\OneDrive\Escritorio\PROYECTO\POLITANIA\Bardo-Extension-Instalador`. Abre el ejecutable, elige **Brave**, **Opera GX** u **Opera** (tercera opción) y pulsa **Instalar**: crea un perfil propio, carga la extensión automáticamente y deja un acceso directo en el escritorio. Para usarla después debe abrir Bardo desde ese acceso directo. No requiere Modo desarrollador. El perfil habitual no se modifica. La carga automática se probó en los tres navegadores con perfiles temporales. Consulta [LEEME.md](../Bardo-Extension-Instalador/LEEME.md).
 
 ## Bot de Discord
 
-1. Abre la [invitación del bot](https://discord.com/oauth2/authorize?client_id=1567243383431237793&scope=bot%20applications.commands&permissions=3146752) y autoriza Ver canal, Conectar y Hablar. En `ElFuturoesHoy` ya está instalado.
+1. Abre la [invitación del bot para servidores](https://discord.com/oauth2/authorize?client_id=1567243383431237793&scope=bot%20applications.commands&permissions=3146752&integration_type=0) y autoriza Ver canal, Conectar y Hablar. Quien lo instala debe poder administrar ese servidor. En `ElFuturoesHoy` ya está instalado.
 2. Entra a un canal de voz y ejecuta `/conectar` en Discord. El bot te entrega un código temporal de vinculación.
 3. En el reproductor abre **Bot de Discord**, pega el código, activa **Modo Discord** y selecciona una pestaña con audio.
 4. Consulta `/estado` o usa `/salir` para desconectarlo. Tras reiniciar el bot, ejecuta `/conectar` otra vez.
+
+Para crear otro enlace, abre **Discord Developer Portal → Bardo Politanense JR → OAuth2 → URL Generator**, marca los ámbitos `bot` y `applications.commands`, selecciona **Guild Install / Instalación de servidor** y los permisos **View Channels / Ver canales**, **Connect / Conectar** y **Speak / Hablar**. Copia la URL generada. Si otra persona debe instalarlo, revisa que **Bot → Public Bot** esté activado y que **Installation → Guild Install** esté habilitado. La cifra `3146752` de la URL anterior representa esos tres permisos.
+
+Para cambiar permisos de un bot ya instalado, abre en Discord **Ajustes del servidor → Roles → Bardo Politanense JR** y ajusta su rol. Revisa también los permisos específicos del canal de voz. Los permisos de los comandos `/conectar`, `/estado` y `/salir` se ajustan en **Ajustes del servidor → Integraciones → Bardo Politanense JR**. Si cambias los permisos solicitados por defecto en el Portal, genera y comparte una URL nueva para futuras instalaciones.
 
 El bot conserva un búfer de **1200 ms** que evita cortes. Durante un salto, el punto principal indica el destino solicitado y una marca secundaria muestra la posición que aún sale por Discord; al terminar el búfer vuelven a coincidir. La captura de pestaña la solicita tu navegador al activar el modo; el enlace HTTPS permite usarla desde otro ordenador.
 
@@ -71,6 +75,7 @@ El bot conserva un búfer de **1200 ms** que evita cortes. Durante un salto, el 
 - **Álbumes:** el botón de tres puntos abre las opciones para crear o administrar un álbum. En el modal puedes cambiar de álbum, renombrarlo, ordenar sus canciones arrastrando el icono o con Alt + flechas, editar una canción y eliminar el álbum.
 - **Volumen:** un clic abre la barra; dentro de ella puedes silenciar y recuperar el nivel anterior. El clic derecho sobre el icono también alterna silencio.
 - **Video:** **Mostrar video** amplía el iframe dentro del reproductor; al ocultarlo vuelve a escala cero sin reiniciar el audio. En la ventana flotante y minimizada se muestra solo el icono. Si se abre desde la vista minimizada, el reproductor se expande para darle espacio.
+- **Teclas multimedia:** Play/Pausa, Pista anterior y Pista siguiente usan las teclas multimedia del navegador. En este teclado corresponden a Fn + Ñ, Fn + L y Fn + `{`; el sistema debe entregar esos eventos a Brave u Opera.
 
 ## Mantenimiento
 

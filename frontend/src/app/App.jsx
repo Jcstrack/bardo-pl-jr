@@ -11,7 +11,7 @@ import VolumePopover from '../features/player/components/VolumePopover.jsx';
 import RepeatMenu from '../features/player/components/RepeatMenu.jsx';
 import PlaybackMenu from '../features/player/components/PlaybackMenu.jsx';
 import { parseMediaUrl, urlsFromDrop } from '../features/media/lib/mediaSources.js';
-import { clamp, keyboardSeekTarget } from '../features/player/lib/playerMath.js';
+import { clamp, keyboardSeekTarget, seekTarget } from '../features/player/lib/playerMath.js';
 import { repeatEnd, repeatStart } from '../features/player/lib/playbackRange.js';
 import { albumIdsOf, trackInAlbum } from '../features/library/lib/trackAlbums.js';
 import useDiscordStream from '../features/discord/hooks/useDiscordStream.js';
@@ -29,6 +29,7 @@ import {
 import {
   acceptInvite,
   clearOfflineChanges,
+  deleteSharedAlbum,
   establishLibrarySession,
   editorKeyFromBrowser,
   fetchSharedLibrary,
@@ -81,7 +82,7 @@ function App() {
   const [repeat, setRepeat] = useState(Boolean(saved?.repeat));
   const [libraryOpen, setLibraryOpen] = useState(saved?.libraryOpen ?? true);
   const [miniLibraryOpen, setMiniLibraryOpen] = useState(false);
-  const [videoOpen, setVideoOpen] = useState(false);
+  const [videoOpen, setVideoOpen] = useState(Boolean(saved?.videoOpen));
   const [volume, setVolume] = useState(Number.isFinite(saved?.volume) ? saved.volume : 0.8);
   const [elapsed, setElapsed] = useState(0);
   const [seekRequest, setSeekRequest] = useState(null);
@@ -104,6 +105,8 @@ function App() {
   const [remoteReady, setRemoteReady] = useState(false);
   const [editorKey, setEditorKey] = useState(editorKeyFromBrowser);
   const [accessRole, setAccessRole] = useState(null);
+  const [accessPermissions, setAccessPermissions] = useState(null);
+  const [deletingAlbum, setDeletingAlbum] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [editingAlbumIds, setEditingAlbumIds] = useState([]);
   const [editFromAlbumManager, setEditFromAlbumManager] = useState(false);
@@ -130,6 +133,7 @@ function App() {
   const seekCandidateRef = useRef(null);
   const confirmedSeekRef = useRef(null);
   const previousTapRef = useRef({ activeId: null, at: 0 });
+  const mediaControlsRef = useRef(null);
   const advanceMarkerRef = useRef(null);
   const advanceAtMarkerRef = useRef(null);
   const fileRef = useRef(null);
@@ -149,6 +153,7 @@ function App() {
   const pendingChangesRef = useRef([]);
   const pendingLibraryRef = useRef(null);
   const processingChangesRef = useRef(false);
+  const albumDeletionRef = useRef(false);
   const currentTracksRef = useRef(tracks);
   const currentAlbumsRef = useRef(albums);
   currentTracksRef.current = tracks;
@@ -237,6 +242,8 @@ function App() {
   );
   // No ligar la canción que suena al álbum seleccionado en la interfaz.
   const active = tracks.find((track) => track.id === activeId);
+  const videoVisible = videoOpen && active?.kind === 'youtube' && view !== 'minimized';
+  const mediaEnabled = view !== 'closed';
   // Siguiente/anterior siguen la lista del álbum de la canción en reproducción.
   const queueAlbumId =
     active && trackInAlbum(active, playbackAlbumId) ? playbackAlbumId : active?.albumId;
@@ -256,6 +263,12 @@ function App() {
     active && (!live || captureMode === 'monitor' || tabController.connected),
   );
   const editingTrack = tracks.find((track) => track.id === editingId);
+  const mayChangeLibrary = (action) => Boolean(editorKey && (accessRole === 'owner' || accessPermissions?.[action]));
+  const denyLibraryAction = (action) => {
+    if (mayChangeLibrary(action)) return false;
+    setMessage(editorKey ? 'Tu invitación no permite esta acción.' : 'Abre un enlace de invitación para editar la biblioteca.');
+    return true;
+  };
 
   useEffect(() => {
     if (!seekRequest || seekRequest.confirmedAt || seekRequest.failed) return undefined;
@@ -323,6 +336,7 @@ function App() {
         const access = accessKey ? await establishLibrarySession(accessKey) : null;
         let remote = await fetchSharedLibrary(accessKey);
         setAccessRole(access?.role || null);
+        setAccessPermissions(access?.permissions || remote.permissions || null);
         if (!accessKey && saved?.albums?.length && !importedHere()) {
           setTracks(localTracks);
           setMessage(
@@ -333,14 +347,13 @@ function App() {
         }
         if (!accessKey) markImported();
         let pendingFiles = [];
-        if (
-          accessKey &&
-          saved &&
-          (!importedHere() ||
+        const shouldImportSaved = access?.role === 'owner'
+          ? (!importedHere() ||
             offlineChanges() ||
             remote.revision === 0 ||
             localTracks.some((track) => track.kind === 'file' && !track.serverSrc))
-        ) {
+          : offlineChanges();
+        if (accessKey && saved && shouldImportSaved) {
           const missingAlbums = saved.albums.filter(
             (album) => !remote.albums.some((item) => item.id === album.id),
           );
@@ -376,6 +389,7 @@ function App() {
             clearOfflineChanges();
           }
         }
+        if (!pendingFiles.length) markImported();
         if (cancelled) return;
         sharedBaselineRef.current = sharedSnapshot(remote.albums, remote.tracks);
         serverRevisionRef.current = remote.revision;
@@ -469,10 +483,11 @@ function App() {
   useEffect(() => {
     if (!remoteReady) return;
     const poll = async () => {
-      if (processingChangesRef.current || pendingChangesRef.current.length) return;
+      if (albumDeletionRef.current || processingChangesRef.current || pendingChangesRef.current.length) return;
       try {
         const remote = await fetchSharedLibrary(editorKey);
-        if (remote.revision <= serverRevisionRef.current || processingChangesRef.current) return;
+        setAccessPermissions(remote.permissions || null);
+        if (remote.revision <= serverRevisionRef.current || albumDeletionRef.current || processingChangesRef.current) return;
         if (
           libraryChanges(
             sharedBaselineRef.current,
@@ -498,8 +513,18 @@ function App() {
             ? old
             : (remote.tracks[0]?.id ?? null),
         );
-      } catch {
-        /* La copia local permanece disponible mientras vuelve la red. */
+      } catch (error) {
+        if (error.status === 401) {
+          setAccessRole(null);
+          setAccessPermissions(null);
+          setSyncReady(false);
+          setRemoteReady(false);
+          setAlbums([]);
+          setTracks([]);
+          setActiveId(null);
+          setMessage('La invitación venció o fue revocada. Pide un enlace nuevo al anfitrión.');
+        }
+        /* Ante un fallo temporal de red, la copia local permanece disponible. */
       }
     };
     const timer = setInterval(poll, 4000);
@@ -515,6 +540,7 @@ function App() {
       activeId,
       repeat,
       libraryOpen,
+      videoOpen,
       volume,
       view,
       position,
@@ -539,6 +565,7 @@ function App() {
     activeId,
     repeat,
     libraryOpen,
+    videoOpen,
     volume,
     view,
     position,
@@ -580,7 +607,6 @@ function App() {
     confirmedSeekRef.current = null;
     advanceMarkerRef.current = null;
     previousTapRef.current = { activeId: null, at: 0 };
-    setVideoOpen(false);
     setElapsed(0);
     setDuration(0);
     setSourceIsLive(false);
@@ -915,7 +941,7 @@ function App() {
 
   const seekActive = (value, origin = 'pointer') => {
     if (origin !== 'keyboard') keyboardSeekRef.current = { activeId: null, value: 0, at: 0 };
-    const next = clamp(value, 0, duration || value);
+    const next = seekTarget(value, duration, playStart, origin === 'marker');
     if (playNext !== null && next < playNext - 0.5) advanceMarkerRef.current = null;
     const request = {
       id: crypto.randomUUID(),
@@ -942,7 +968,7 @@ function App() {
     const previous = keyboardSeekRef.current;
     const base =
       previous.activeId === activeId && now - previous.at < 2000 ? previous.value : visiblePosition;
-    const target = keyboardSeekTarget(event.key, base, duration, event.shiftKey);
+    const target = keyboardSeekTarget(event.key, base, duration, event.shiftKey, playStart ?? 0);
     if (target === null) return;
     event.preventDefault();
     keyboardSeekRef.current = { activeId, value: target, at: now };
@@ -965,8 +991,7 @@ function App() {
   };
 
   const setLoopMarker = (kind, value) => {
-    if (!editorKey && !live)
-      return setMessage('Se necesita una invitación para editar esta canción.');
+    if (!live && denyLibraryAction('edit')) return;
     if (!active || !duration || mediaIsLive) return;
     const next =
       kind === 'loopStart'
@@ -981,8 +1006,7 @@ function App() {
   };
 
   const clearLoopMarkers = () => {
-    if (!editorKey && !live)
-      return setMessage('Se necesita una invitación para editar esta canción.');
+    if (!live && denyLibraryAction('edit')) return;
     if (!active) return;
     if (live) {
       const { loopStart: _start, loopEnd: _end, ...rest } = captureLoops()[tabController.url] || {};
@@ -1007,9 +1031,8 @@ function App() {
     });
   };
 
-  const setPlayMarker = (kind, value) => {
-    if (!editorKey && !live)
-      return setMessage('Se necesita una invitación para editar esta canción.');
+  const setPlayMarker = (kind, value, commit = true) => {
+    if (!live && denyLibraryAction('edit')) return;
     if (!active || !duration || mediaIsLive) return;
     const next =
       kind === 'playStart'
@@ -1031,11 +1054,11 @@ function App() {
       if (kind === 'playNext') delete updated.playEnd;
       saveCaptureLoop(tabController.url, updated);
     }
+    if (kind === 'playStart' && commit) seekActive(next, 'marker');
   };
 
   const clearPlayMarkers = () => {
-    if (!editorKey && !live)
-      return setMessage('Se necesita una invitación para editar esta canción.');
+    if (!live && denyLibraryAction('edit')) return;
     if (!active) return;
     advanceMarkerRef.current = null;
     if (live) {
@@ -1067,7 +1090,7 @@ function App() {
   };
 
   const moveTrack = (id, targetId, after = false) => {
-    if (!editorKey) return setMessage('Se necesita una invitación para ordenar canciones.');
+    if (denyLibraryAction('edit')) return;
     if (!id || !targetId || id === targetId) return;
     setTracks((old) => {
       const moving = old.find((track) => track.id === id);
@@ -1212,6 +1235,7 @@ function App() {
   };
 
   const edit = (track, fromAlbumManager = false) => {
+    if (denyLibraryAction('edit')) return;
     setEditFromAlbumManager(fromAlbumManager);
     setEditingId(track.id);
     setEditingAlbumIds(albumIdsOf(track));
@@ -1223,7 +1247,7 @@ function App() {
 
   const saveEdit = (event) => {
     event.preventDefault();
-    if (!editorKey) return setMessage('Se necesita una invitación para editar canciones.');
+    if (denyLibraryAction('edit')) return;
     if (!editingTrack) return;
     if (!editingAlbumIds.length) return setMessage('Elige al menos un álbum para esta canción.');
     try {
@@ -1303,16 +1327,64 @@ function App() {
     else seekActive(playStart ?? 0);
   };
 
+  useEffect(() => {
+    mediaControlsRef.current = { playing, togglePlay, step };
+  });
+
+  useEffect(() => {
+    if (!mediaEnabled) return undefined;
+    const session = navigator.mediaSession;
+    const run = (name) => {
+      const controls = mediaControlsRef.current;
+      if (!controls) return;
+      if (name === 'playpause') controls.togglePlay();
+      if (name === 'play' && !controls.playing) controls.togglePlay();
+      if (name === 'pause' && controls.playing) controls.togglePlay();
+      if (name === 'previoustrack') controls.step(-1);
+      if (name === 'nexttrack') controls.step(1);
+    };
+    const names = ['play', 'pause', 'previoustrack', 'nexttrack'];
+    if (session) for (const name of names) {
+      try { session.setActionHandler(name, () => run(name)); } catch { /* Tecla no admitida. */ }
+    }
+    const onMediaKey = (event) => {
+      if (event.repeat) return;
+      const name = {
+        MediaPlayPause: 'playpause', MediaPlay: 'play', MediaPause: 'pause',
+        MediaTrackPrevious: 'previoustrack', MediaTrackNext: 'nexttrack',
+      }[event.key];
+      if (!name) return;
+      event.preventDefault();
+      run(name);
+    };
+    window.addEventListener('keydown', onMediaKey, true);
+    return () => {
+      window.removeEventListener('keydown', onMediaKey, true);
+      if (session) for (const name of names) {
+        try { session.setActionHandler(name, null); } catch { /* Sin acción registrada. */ }
+      }
+    };
+  }, [mediaEnabled]);
+
+  useEffect(() => {
+    const session = navigator.mediaSession;
+    if (!session) return;
+    session.playbackState = view === 'closed' ? 'none' : playing ? 'playing' : 'paused';
+    if (active && window.MediaMetadata) session.metadata = new MediaMetadata({
+      title: active.title || 'Bardo Politanense',
+      artist: active.artist || '',
+      album: albums.find((album) => album.id === playbackAlbumId)?.name || '',
+    });
+  }, [active, albums, playbackAlbumId, playing, view]);
+
   const minimizePlayer = () => {
     // Nunca llamar a pauseVideo ni desmontar YouTubePlayer aquí.
-    setVideoOpen(false);
     setVolumeOpen(false);
     setMiniLibraryOpen(false);
     setView('minimized');
   };
 
   const closePlayer = () => {
-    setVideoOpen(false);
     discordStream.stop();
     audioRef.current?.pause();
     if (active?.kind === 'youtube') youtubeRef.current?.pauseVideo();
@@ -1347,7 +1419,7 @@ function App() {
 
   const createAlbum = (event) => {
     event.preventDefault();
-    if (!editorKey) return setMessage('Se necesita una invitación para crear álbumes.');
+    if (denyLibraryAction('add')) return;
     const name = albumName.trim();
     if (!name) return;
     const album = { id: crypto.randomUUID(), name };
@@ -1359,7 +1431,7 @@ function App() {
 
   const renameAlbum = (event) => {
     event.preventDefault();
-    if (!editorKey) return setMessage('Se necesita una invitación para editar álbumes.');
+    if (denyLibraryAction('edit')) return;
     const name = albumName.trim();
     if (!selectedAlbum || !name) return;
     setAlbums((old) =>
@@ -1368,64 +1440,66 @@ function App() {
     setModal(null);
   };
 
-  const deleteAlbum = () => {
-    if (!editorKey) return setMessage('Se necesita una invitación para eliminar álbumes.');
-    if (!selectedAlbum) return;
-    if (
-      !window.confirm(
-        '¿Eliminar el álbum “' +
-          selectedAlbum.name +
-          '”? Las canciones compartidas con otros álbumes se conservarán.',
-      )
-    )
-      return;
-    const removed = tracks.filter(
-      (track) => trackInAlbum(track, selectedAlbumId) && albumIdsOf(track).length === 1,
-    );
-    removed.forEach((track) => {
-      if (track.kind === 'file') {
+  const deleteAlbum = async () => {
+    if (denyLibraryAction('delete')) return;
+    if (!selectedAlbum || albumDeletionRef.current) return;
+    albumDeletionRef.current = true;
+    setDeletingAlbum(true);
+    setMessage('');
+    const albumId = selectedAlbum.id;
+    try {
+      const deadline = Date.now() + 10000;
+      while (processingChangesRef.current || pendingChangesRef.current.length) {
+        if (Date.now() > deadline) throw new Error('Hay cambios pendientes. Espera a que se guarden y vuelve a intentarlo.');
+        await new Promise((resolve) => window.setTimeout(resolve, 100));
+      }
+      const remote = await deleteSharedAlbum(editorKey, albumId);
+      const remainingIds = new Set(remote.tracks.map((track) => track.id));
+      const remainingAlbumIds = new Set(remote.albums.map((album) => album.id));
+      const removed = currentTracksRef.current.filter(
+        (track) => !remainingIds.has(track.id) && !albumIdsOf(track).some((id) => remainingAlbumIds.has(id)),
+      );
+      removed.forEach((track) => {
+        if (track.kind !== 'file') return;
         removedTrackIdsRef.current.add(track.id);
-        if (track.src) {
+        if (track.src?.startsWith('blob:')) {
           URL.revokeObjectURL(track.src);
           objectUrlsRef.current.delete(track.src);
         }
-        deleteAudioFile(track.id).catch(() => setMessage('No se pudo borrar un archivo guardado.'));
+        deleteAudioFile(track.id).catch(() => {});
+      });
+      sharedBaselineRef.current = sharedSnapshot(remote.albums, remote.tracks);
+      serverRevisionRef.current = remote.revision;
+      setAlbums(remote.albums);
+      setTracks([
+        ...remote.tracks,
+        ...currentTracksRef.current.filter((track) =>
+          track.kind === 'capture' ||
+          (track.kind === 'file' &&
+            !track.serverSrc &&
+            albumIdsOf(track).some((id) => remainingAlbumIds.has(id))),
+        ),
+      ]);
+      setSelectedAlbumId((old) => old === albumId ? (remote.albums[0]?.id ?? null) : old);
+      if (removed.some((track) => track.id === activeId)) {
+        autoPlayRef.current = false;
+        setPlaying(false);
+        setActiveId(remote.tracks[0]?.id ?? null);
       }
-    });
-    const remainingAlbums = albums.filter((album) => album.id !== selectedAlbumId);
-    setTracks((old) =>
-      old.flatMap((track) => {
-        if (!trackInAlbum(track, selectedAlbumId)) return [track];
-        const remainingIds = albumIdsOf(track).filter((id) => id !== selectedAlbumId);
-        return remainingIds.length
-          ? [
-              {
-                ...track,
-                albumIds: remainingIds,
-                albumId: remainingIds.includes(track.albumId) ? track.albumId : remainingIds[0],
-              },
-            ]
-          : [];
-      }),
-    );
-    setAlbums(remainingAlbums);
-    // Borrar otro álbum no debe interrumpir la pista en reproducción.
-    // Si se borra precisamente la pista que suena, sí se detiene.
-    if (removed.some((track) => track.id === activeId)) {
-      autoPlayRef.current = false;
-      setActiveId(null);
+      if (playbackAlbumId === albumId)
+        setPlaybackAlbumId(albumIdsOf(active).find((id) => id !== albumId) ?? remote.albums[0]?.id ?? null);
+      clearOfflineChanges();
+      setModal(null);
+    } catch (error) {
+      setMessage(`No se pudo eliminar el álbum: ${error.message}`);
+    } finally {
+      albumDeletionRef.current = false;
+      setDeletingAlbum(false);
     }
-    setSelectedAlbumId(remainingAlbums[0]?.id ?? null);
-    if (playbackAlbumId === selectedAlbumId) {
-      setPlaybackAlbumId(
-        albumIdsOf(active).find((id) => id !== selectedAlbumId) ?? remainingAlbums[0]?.id ?? null,
-      );
-    }
-    setModal(null);
   };
 
   const remove = (id) => {
-    if (!editorKey) return setMessage('Se necesita una invitación para quitar canciones.');
+    if (denyLibraryAction('delete')) return;
     const track = tracks.find((item) => item.id === id);
     if (!track) return;
     const remainingIds = albumIdsOf(track).filter((albumId) => albumId !== selectedAlbumId);
@@ -1477,7 +1551,7 @@ function App() {
   };
 
   const addFiles = (fileList, fromDrop = false) => {
-    if (!editorKey) return setMessage('Abre un enlace de invitación para agregar música.');
+    if (denyLibraryAction('add')) return;
     const files = Array.from(fileList).filter(
       (file) => file.type.startsWith('audio/') || /\.(mp3|wav|ogg|m4a|aac|flac)$/i.test(file.name),
     );
@@ -1549,7 +1623,7 @@ function App() {
 
   const addLink = (event) => {
     event.preventDefault();
-    if (!editorKey) return setMessage('Abre un enlace de invitación para agregar música.');
+    if (denyLibraryAction('add')) return;
     if (!selectedAlbumId) return setMessage('Crea un álbum antes de añadir música.');
     let source;
     try {
@@ -1579,7 +1653,7 @@ function App() {
   };
 
   const addDroppedUrls = (dataTransfer) => {
-    if (!editorKey) return setMessage('Abre un enlace de invitación para agregar música.');
+    if (denyLibraryAction('add')) return;
     const urls = urlsFromDrop(dataTransfer);
     if (!urls.length) {
       expandPlayer();
@@ -1619,7 +1693,7 @@ function App() {
   };
 
   const supportsDrop = (dataTransfer) =>
-    !Array.from(dataTransfer.types).includes('application/x-sonora-track') &&
+    !Array.from(dataTransfer.types).includes('application/x-bardo-politanense-track') &&
     Array.from(dataTransfer.types).some((type) =>
       ['Files', 'text/uri-list', 'text/plain'].includes(type),
     );
@@ -1640,7 +1714,8 @@ function App() {
     if (dragDepthRef.current === 0) setDropActive(false);
   };
   const onDrop = (event) => {
-    if (Array.from(event.dataTransfer.types).includes('application/x-sonora-track')) return;
+    if (Array.from(event.dataTransfer.types).includes('application/x-bardo-politanense-track'))
+      return;
     event.preventDefault();
     dragDepthRef.current = 0;
     setDropActive(false);
@@ -1754,13 +1829,13 @@ function App() {
   };
 
   const openCreateAlbum = () => {
-    if (!editorKey) return setMessage('Abre un enlace de invitación para crear álbumes.');
+    if (denyLibraryAction('add')) return;
     setAlbumName('');
     setMessage('');
     setModal('album-add');
   };
   const openEditAlbum = () => {
-    if (!editorKey) return setMessage('Abre un enlace de invitación para editar álbumes.');
+    if (denyLibraryAction('edit')) return;
     setAlbumName(selectedAlbum?.name || '');
     setMessage('');
     setModal('album-edit');
@@ -1770,7 +1845,7 @@ function App() {
     setAlbumName(albums.find((album) => album.id === id)?.name || '');
   };
   const openAddMusic = () => {
-    if (!editorKey) return setMessage('Abre un enlace de invitación para agregar música.');
+    if (denyLibraryAction('add')) return;
     setUrl('');
     setTitle('');
     setMessage('');
@@ -1902,11 +1977,11 @@ function App() {
           {/* Mantenemos el contenido montado al minimizar: el iframe no se reinicia. */}
           <div
             ref={contentRef}
-            className={videoOpen ? 'player-content player-content--video' : 'player-content'}
+            className={videoVisible ? 'player-content player-content--video' : 'player-content'}
             aria-hidden={view === 'minimized'}
             inert={view === 'minimized'}
           >
-            <div className={videoOpen ? 'playback-area playback-area--video' : 'playback-area'}>
+            <div className={videoVisible ? 'playback-area playback-area--video' : 'playback-area'}>
               <PlaybackSource
                 active={active}
                 live={live}
@@ -1930,7 +2005,7 @@ function App() {
                 playNext={playNext}
                 playing={playing}
                 maximized={view === 'maximized'}
-                videoOpen={videoOpen}
+                videoOpen={videoVisible}
                 onVideoVisibility={changeVideoVisibility}
                 loopSeekRef={loopSeekRef}
                 onPlaying={setPlaying}
@@ -2025,6 +2100,7 @@ function App() {
                       discordStream={discordStream}
                       editorKey={editorKey}
                       accessRole={accessRole}
+                      accessPermissions={accessPermissions}
                       maximized={view === 'maximized'}
                     />
                   </Suspense>
@@ -2099,6 +2175,7 @@ function App() {
             onCreateAlbum={createAlbum}
             onRenameAlbum={renameAlbum}
             onDeleteAlbum={deleteAlbum}
+            deletingAlbum={deletingAlbum}
             onAddLink={addLink}
             onSaveEdit={saveEdit}
             onUploadClick={() => fileRef.current.click()}

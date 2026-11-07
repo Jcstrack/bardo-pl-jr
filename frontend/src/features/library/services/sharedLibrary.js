@@ -156,6 +156,40 @@ export async function createFriendInvite(key) {
   );
 }
 
+export async function listFriendInvites(key) {
+  return checked(await fetch('/api/library/invites', {
+    headers: { Authorization: `Bearer ${key}` },
+    credentials: 'same-origin',
+    cache: 'no-store',
+  }));
+}
+
+export async function createManagedInvite(key, details) {
+  return checked(await fetch('/api/library/invites', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+    credentials: 'same-origin',
+    body: JSON.stringify(details),
+  }));
+}
+
+export async function updateFriendInvite(key, id, details) {
+  return checked(await fetch(`/api/library/invites/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+    credentials: 'same-origin',
+    body: JSON.stringify(details),
+  }));
+}
+
+export async function revokeFriendInvite(key, id) {
+  return checked(await fetch(`/api/library/invites/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${key}` },
+    credentials: 'same-origin',
+  }));
+}
+
 export async function sendLibraryChanges(key, changes) {
   return checked(
     await fetch('/api/library/sync', {
@@ -163,6 +197,16 @@ export async function sendLibraryChanges(key, changes) {
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
       credentials: 'same-origin',
       body: JSON.stringify({ changes }),
+    }),
+  );
+}
+
+export async function deleteSharedAlbum(key, id) {
+  return checked(
+    await fetch(`/api/library/albums/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${key}` },
+      credentials: 'same-origin',
     }),
   );
 }

@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import Icon from './Icon.jsx';
 
-export default function ServiceModal({ id, title, description, icon, onClose, children }) {
+export default function ServiceModal({ id, title, description, icon, onClose, children, className = '' }) {
   const dialogRef = useRef(null);
   const closeRef = useRef(null);
 
@@ -21,7 +21,7 @@ export default function ServiceModal({ id, title, description, icon, onClose, ch
 
     const focusable = [
       ...dialogRef.current.querySelectorAll(
-        'button:not(:disabled), input:not(:disabled), a[href], [tabindex]:not([tabindex="-1"])',
+        'button:not(:disabled), input:not(:disabled), select:not(:disabled), a[href], [tabindex]:not([tabindex="-1"])',
       ),
     ];
     if (!focusable.length) return;
@@ -45,7 +45,7 @@ export default function ServiceModal({ id, title, description, icon, onClose, ch
     >
       <section
         ref={dialogRef}
-        className="service-modal"
+        className={'service-modal ' + className}
         role="dialog"
         aria-modal="true"
         aria-labelledby={`${id}-title`}

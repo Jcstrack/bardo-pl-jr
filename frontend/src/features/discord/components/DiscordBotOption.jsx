@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import useBotStatus from '../hooks/useBotStatus.js';
 import Icon from '../../../components/ui/Icon.jsx';
 import ServiceModal from '../../../components/ui/ServiceModal.jsx';
@@ -15,7 +15,12 @@ const statusText = {
 export default function DiscordBotOption({ stream, maximized = false }) {
   const [open, setOpen] = useState(false);
   const [code, setCode] = useState('');
-  const status = useBotStatus(open);
+  const status = useBotStatus(true);
+  const previousPhase = useRef(stream.phase);
+  useEffect(() => {
+    if (maximized && previousPhase.current === 'connecting' && stream.phase === 'on') setOpen(false);
+    previousPhase.current = stream.phase;
+  }, [maximized, stream.phase]);
   const modeActive = stream.phase === 'on' || stream.phase === 'connecting';
   const label = status.streaming
     ? 'Reproduciendo en Discord'
@@ -29,7 +34,7 @@ export default function DiscordBotOption({ stream, maximized = false }) {
 
   const details = open && (
     <div className="discord-option-details" id="discord-option-details" role="status">
-      <strong>Bardo Politanense JR</strong>
+      <strong>Bardo Politanense</strong>
       <p>
         {status.connected
           ? status.voiceConnected

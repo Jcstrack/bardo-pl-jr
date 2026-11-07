@@ -35,8 +35,9 @@ function youtubeVideoId(source) {
 
 let state = { revision: 0, albums: [], tracks: [] }
 let mutation = Promise.resolve()
-let friendKey = ''
+let invitations = []
 let repository
+const fullPermissions = { add: true, edit: true, delete: true }
 
 function json(res, status, value) {
   res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' })
@@ -56,13 +57,68 @@ function equalSecret(supplied, key) {
   return given.length === actual.length && timingSafeEqual(given, actual)
 }
 
-function accessRole(req, ownerKey) {
+function accessContext(req, ownerKey) {
   const auth = req.headers.authorization?.replace(/^Bearer /i, '') || ''
   const cookie = (req.headers.cookie || '').split(';').map((part) => part.trim()).find((part) => part.startsWith('bardo_access='))?.slice('bardo_access='.length) || ''
   const supplied = auth || cookie
-  if (equalSecret(supplied, ownerKey)) return 'owner'
-  if (equalSecret(supplied, friendKey)) return 'friend'
+  if (equalSecret(supplied, ownerKey)) return { role: 'owner', permissions: fullPermissions }
+  const invitation = invitations.find((item) =>
+    !item.revokedAt &&
+    (!item.expiresAt || Date.parse(item.expiresAt) > Date.now()) &&
+    equalSecret(supplied, item.token))
+  if (invitation) return { role: 'friend', permissions: invitation.permissions, invitation }
   return null
+}
+
+function accessRole(req, ownerKey) { return accessContext(req, ownerKey)?.role || null }
+
+function requirePermission(req, ownerKey, action) {
+  const access = accessContext(req, ownerKey)
+  if (!access) throw error(401, 'Se necesita una invitación vigente.')
+  if (access.role !== 'owner' && !access.permissions[action]) throw error(403, 'Esta invitación no permite esta acción.')
+  return access
+}
+
+function cleanPermissions(value, fallback = fullPermissions) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw error(400, 'Permisos inválidos.')
+  return Object.fromEntries(Object.keys(fullPermissions).map((name) => [name, value[name] === undefined ? Boolean(fallback[name]) : value[name] === true]))
+}
+
+function cleanExpiry(value) {
+  if (value === null || value === '') return null
+  if (typeof value !== 'string' || !Number.isFinite(Date.parse(value)) || Date.parse(value) <= Date.now()) throw error(400, 'La fecha de vencimiento debe ser futura.')
+  return new Date(value).toISOString()
+}
+
+function authorizeChanges(req, ownerKey, changes) {
+  if (!changes || typeof changes !== 'object') throw error(400, 'Cambios inválidos.')
+  for (const [collection, current] of [['albums', state.albums], ['tracks', state.tracks]]) {
+    for (const id of changes[collection]?.remove || []) requirePermission(req, ownerKey, 'delete')
+    for (const item of changes[collection]?.upsert || []) {
+      requirePermission(req, ownerKey, current.some((existing) => existing.id === item.id) ? 'edit' : 'add')
+    }
+  }
+  if (changes.order) requirePermission(req, ownerKey, 'edit')
+}
+
+async function saveInvitations() {
+  const temporary = `${invitationFile}.${randomUUID()}.tmp`
+  try {
+    await writeFile(temporary, JSON.stringify({ invitations }), { mode: 0o600 })
+    await rename(temporary, invitationFile)
+  } finally { await rm(temporary, { force: true }) }
+}
+
+function invitationView(item, publicUrl) {
+  return {
+    id: item.id,
+    label: item.label,
+    createdAt: item.createdAt,
+    expiresAt: item.expiresAt,
+    revokedAt: item.revokedAt,
+    permissions: item.permissions,
+    url: publicUrl ? `${publicUrl}#invite=${item.token}` : '',
+  }
 }
 
 async function readJson(req) {
@@ -238,8 +294,17 @@ export async function startServer({ port = Number(process.env.LIBRARY_PORT || 30
     state = { ...state, tracks: recovered }
     repository.save(state)
   }
-  try { friendKey = JSON.parse(await readFile(invitationFile, 'utf8')).token || '' }
-  catch (err) { if (err.code !== 'ENOENT') throw err }
+  try {
+    const stored = JSON.parse(await readFile(invitationFile, 'utf8'))
+    invitations = Array.isArray(stored.invitations) ? stored.invitations.map((item) => ({
+      ...item,
+      permissions: cleanPermissions(item.permissions || fullPermissions),
+    })) : stored.token ? [{
+      id: randomUUID(), token: stored.token, label: 'Invitación anterior',
+      createdAt: new Date().toISOString(), expiresAt: null, revokedAt: null,
+      permissions: { ...fullPermissions },
+    }] : []
+  } catch (err) { if (err.code !== 'ENOENT') throw err; invitations = [] }
   const key = editorKeyFile ? (await readFile(editorKeyFile, 'utf8')).trim() : ''
   if (!key) throw new Error('Falta LIBRARY_EDITOR_KEY_FILE con la clave de invitación.')
   const server = http.createServer(async (req, res) => {
@@ -251,32 +316,67 @@ export async function startServer({ port = Number(process.env.LIBRARY_PORT || 30
       }
       if (url.pathname === '/api/library/session' && req.method === 'POST') {
         const token = req.headers.authorization?.replace(/^Bearer /i, '') || ''
-        const role = equalSecret(token, key) ? 'owner' : equalSecret(token, friendKey) ? 'friend' : null
-        if (!role) throw error(401, 'Invitación inválida.')
+        const access = accessContext(req, key)
+        if (!access) throw error(401, 'Invitación inválida o vencida.')
         const secure = req.headers['x-forwarded-proto'] === 'https' ? '; Secure' : ''
         res.setHeader('Set-Cookie', `bardo_access=${token}; HttpOnly; SameSite=Strict; Path=/api/library; Max-Age=2592000${secure}`)
-        return json(res, 200, { role })
+        return json(res, 200, { role: access.role, permissions: access.permissions })
       }
-      if (url.pathname === '/api/library/invite' && req.method === 'POST') {
-        if (accessRole(req, key) !== 'owner') throw error(403, 'Solo el propietario puede crear la invitación.')
+      if (url.pathname === '/api/library/invite' || url.pathname === '/api/library/invites') {
+        if (accessRole(req, key) !== 'owner') throw error(403, 'Solo el propietario puede administrar invitaciones.')
         const publicUrl = await readPublicUrl(process.env.BARDO_TUNNEL_URL_FILE, process.env.BARDO_PUBLIC_URL)
+        if (req.method === 'GET' && url.pathname.endsWith('/invites'))
+          return json(res, 200, { invitations: invitations.map((item) => invitationView(item, publicUrl)) })
+        if (req.method !== 'POST') throw error(405, 'Método no permitido.')
         if (!publicUrl) throw error(503, 'La dirección privada aún no está lista.')
-        if (!friendKey) {
-          friendKey = randomBytes(32).toString('hex')
-          await writeFile(invitationFile, JSON.stringify({ token: friendKey }), { mode: 0o600 })
+        const body = url.pathname.endsWith('/invites') ? await readJson(req) : {}
+        if (invitations.length >= 100) throw error(413, 'Máximo 100 invitaciones.')
+        const item = {
+          id: randomUUID(), token: randomBytes(32).toString('hex'),
+          label: String(body.label || 'Invitación').trim().slice(0, 80) || 'Invitación',
+          createdAt: new Date().toISOString(), expiresAt: cleanExpiry(body.expiresAt ?? null),
+          revokedAt: null, permissions: cleanPermissions(body.permissions || fullPermissions),
         }
-        return json(res, 200, { url: `${publicUrl}#invite=${friendKey}` })
+        await serial(async () => { invitations.push(item); await saveInvitations() })
+        return json(res, 201, { ...invitationView(item, publicUrl), invitation: invitationView(item, publicUrl) })
+      }
+      const inviteMatch = /^\/api\/library\/invites\/([a-zA-Z0-9_-]{1,80})$/.exec(url.pathname)
+      if (inviteMatch) {
+        if (accessRole(req, key) !== 'owner') throw error(403, 'Solo el propietario puede administrar invitaciones.')
+        const item = invitations.find((invitation) => invitation.id === inviteMatch[1])
+        if (!item) throw error(404, 'Invitación no encontrada.')
+        if (req.method === 'PATCH') {
+          const body = await readJson(req)
+          await serial(async () => {
+            if (item.revokedAt) throw error(409, 'La invitación ya fue revocada.')
+            if (body.label !== undefined) item.label = String(body.label).trim().slice(0, 80) || 'Invitación'
+            if (body.expiresAt !== undefined) item.expiresAt = cleanExpiry(body.expiresAt)
+            if (body.permissions !== undefined) item.permissions = cleanPermissions(body.permissions, item.permissions)
+            await saveInvitations()
+          })
+          const publicUrl = await readPublicUrl(process.env.BARDO_TUNNEL_URL_FILE, process.env.BARDO_PUBLIC_URL)
+          return json(res, 200, { invitation: invitationView(item, publicUrl) })
+        }
+        if (req.method === 'DELETE') {
+          await serial(async () => { item.revokedAt ||= new Date().toISOString(); await saveInvitations() })
+          return json(res, 200, { revoked: true })
+        }
+        throw error(405, 'Método no permitido.')
       }
       if (url.pathname === '/api/library') {
         if (req.method !== 'GET') throw error(405, 'Método no permitido.')
-        if (!accessRole(req, key)) throw error(401, 'Abre una invitación para ver la biblioteca.')
-        return json(res, 200, state)
+        const access = accessContext(req, key)
+        if (!access) throw error(401, 'Abre una invitación vigente para ver la biblioteca.')
+        return json(res, 200, { ...state, role: access.role, permissions: access.permissions })
       }
       if (url.pathname === '/api/library/sync') {
         if (req.method !== 'POST') throw error(405, 'Método no permitido.')
         if (!accessRole(req, key)) throw error(401, 'Se necesita un enlace de invitación para editar.')
         const body = await readJson(req)
-        return json(res, 200, await serial(() => applyChanges(body.changes)))
+        return json(res, 200, await serial(() => {
+          authorizeChanges(req, key, body.changes)
+          return applyChanges(body.changes)
+        }))
       }
       const resource = /^\/api\/library\/(albums|tracks)(?:\/([a-zA-Z0-9_-]{1,80}))?$/.exec(url.pathname)
       if (resource) {
@@ -293,6 +393,7 @@ export async function startServer({ port = Number(process.env.LIBRARY_PORT || 30
           return json(res, 200, id ? { [singular]: selected, revision: state.revision } : { [collection]: selected, revision: state.revision })
         }
         if (req.method === 'POST' && !id) {
+          requirePermission(req, key, 'add')
           const body = await readJson(req)
           const raw = body[singular] || body
           const item = { ...raw, id: raw.id || randomUUID() }
@@ -303,6 +404,7 @@ export async function startServer({ port = Number(process.env.LIBRARY_PORT || 30
           return json(res, 201, { [singular]: result[collection].find((saved) => saved.id === item.id), revision: result.revision })
         }
         if (req.method === 'PATCH' && id) {
+          requirePermission(req, key, 'edit')
           const body = await readJson(req)
           const result = await serial(() => {
             const current = state[collection].find((old) => old.id === id)
@@ -313,11 +415,12 @@ export async function startServer({ port = Number(process.env.LIBRARY_PORT || 30
           return json(res, 200, { [singular]: result[collection].find((saved) => saved.id === id), revision: result.revision })
         }
         if (req.method === 'DELETE' && id) {
+          requirePermission(req, key, 'delete')
           const result = await serial(() => {
             if (!state[collection].some((old) => old.id === id)) throw error(404, 'Elemento no encontrado.')
             return applyChanges({ [collection]: { remove: [id] } })
           })
-          return json(res, 200, { revision: result.revision })
+          return json(res, 200, result)
         }
         throw error(405, 'Método no permitido.')
       }
@@ -328,7 +431,7 @@ export async function startServer({ port = Number(process.env.LIBRARY_PORT || 30
         return await serveAudio(req, res, match[1])
       }
       if (req.method === 'PUT') {
-        if (!accessRole(req, key)) throw error(401, 'Se necesita un enlace de invitación para subir audio.')
+        requirePermission(req, key, 'add')
         return await upload(req, res, match[1])
       }
       throw error(405, 'Método no permitido.')

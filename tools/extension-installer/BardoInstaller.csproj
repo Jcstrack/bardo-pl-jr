@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net9.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>Instalar-Bardo-Extension</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Assets\extension.zip" />
+  </ItemGroup>
+</Project>

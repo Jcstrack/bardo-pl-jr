@@ -1,7 +1,7 @@
 {
   "name": "bardo-politanense-jr-bot",
   "version": "1.0.0",
-  "description": "Bardo Politanense JR, bot musical de Discord conectado a Sonora",
+  "description": "Bot musical de Discord conectado a Bardo Politanense",
   "private": true,
   "type": "module",
   "main": "src/index.js",
@@ -12,7 +12,7 @@
   "keywords": [
     "discord",
     "music",
-    "sonora"
+    "bardo-politanense"
   ],
   "author": "",
   "license": "ISC",

@@ -42,29 +42,44 @@ export default function YouTubePlayer({
   playerRef,
   onState,
   onProgress,
-  onError,
 }) {
   const hostRef = useRef(null);
-  const [stalled, setStalled] = useState(false);
+  const previousVideoId = useRef(videoId);
+  const [issue, setIssue] = useState(null);
   const [attempt, setAttempt] = useState(0);
   const latest = useRef({
+    videoId,
     volume,
     autoPlayRef,
     startAt,
     onState,
     onProgress,
-    onError,
   });
   useEffect(() => {
     latest.current = {
+      videoId,
       volume,
       autoPlayRef,
       startAt,
       onState,
       onProgress,
-      onError,
     };
   });
+
+  useEffect(() => {
+    if (previousVideoId.current === videoId) return;
+    previousVideoId.current = videoId;
+    setIssue(null);
+    const player = playerRef.current;
+    if (!player) return;
+    const selection = { videoId, startSeconds: Math.max(0, startAt || 0) };
+    try {
+      if (autoPlayRef.current) player.loadVideoById(selection);
+      else player.cueVideoById(selection);
+    } catch {
+      setIssue('load');
+    }
+  }, [videoId, startAt, autoPlayRef, playerRef]);
 
   useEffect(() => {
     let disposed = false;
@@ -74,8 +89,8 @@ export default function YouTubePlayer({
     host?.appendChild(mount);
     const readyTimeout = window.setTimeout(() => {
       if (!disposed && !playerRef.current) {
-        setStalled(true);
-        latest.current.onError('timeout');
+        setIssue('timeout');
+        latest.current.onState(2);
       }
     }, 15000);
     const reportProgress = () => {
@@ -93,11 +108,15 @@ export default function YouTubePlayer({
       .then((YT) => {
         if (disposed || !host) return;
         player = new YT.Player(mount, {
-          width: '256',
+          width: '200',
           height: '200',
           videoId,
           playerVars: {
             controls: 1,
+            rel: 0,
+            fs: 0,
+            iv_load_policy: 3,
+            disablekb: 1,
             playsinline: 1,
             origin: window.location.origin,
           },
@@ -105,24 +124,34 @@ export default function YouTubePlayer({
             onReady: (event) => {
               if (disposed) return;
               window.clearTimeout(readyTimeout);
-              setStalled(false);
+              setIssue(null);
               playerRef.current = event.target;
               event.target.setVolume(Math.round(latest.current.volume * 100));
-              if (latest.current.startAt > 0) event.target.seekTo(latest.current.startAt, true);
+              if (latest.current.videoId !== videoId) {
+                const selection = {
+                  videoId: latest.current.videoId,
+                  startSeconds: Math.max(0, latest.current.startAt || 0),
+                };
+                if (latest.current.autoPlayRef.current) event.target.loadVideoById(selection);
+                else event.target.cueVideoById(selection);
+              } else {
+                if (latest.current.startAt > 0) event.target.seekTo(latest.current.startAt, true);
+                if (latest.current.autoPlayRef.current) event.target.playVideo();
+              }
               reportProgress();
-              if (latest.current.autoPlayRef.current) event.target.playVideo();
             },
             onStateChange: (event) => {
+              if (event.data === 1) setIssue(null);
               reportProgress();
               latest.current.onState(event.data);
             },
             onError: (event) => {
-              setStalled(true);
-              latest.current.onError(event.data);
+              setIssue(event.data);
+              latest.current.onState(2);
             },
             onAutoplayBlocked: () => {
-              setStalled(true);
-              latest.current.onError('autoplay');
+              setIssue('autoplay');
+              latest.current.onState(2);
             },
           },
         });
@@ -130,8 +159,8 @@ export default function YouTubePlayer({
       .catch(() => {
         if (!disposed) {
           window.clearTimeout(readyTimeout);
-          setStalled(true);
-          latest.current.onError('load');
+          setIssue('load');
+          latest.current.onState(2);
         }
       });
     const interval = window.setInterval(reportProgress, 100);
@@ -148,7 +177,7 @@ export default function YouTubePlayer({
       mount.remove();
       host?.replaceChildren();
     };
-  }, [videoId, playerRef, attempt]);
+  }, [playerRef, attempt]);
 
   useEffect(() => {
     try {
@@ -160,6 +189,16 @@ export default function YouTubePlayer({
 
   const videoVisible = videoOpen;
   const closeVideo = () => onVideoVisibility(false);
+  const retryable = issue === 'timeout' || issue === 'load';
+  const issueText = issue === null
+    ? ''
+    : issue === 'autoplay'
+      ? 'El navegador bloqueó el inicio automático. Pulsa Reproducir.'
+      : retryable
+        ? 'YouTube tardó en cargar. Reintenta con el video visible.'
+        : issue === 100
+          ? 'Video no encontrado o no disponible. Revisa el enlace de la canción.'
+          : 'Este video no permite reproducirse aquí. Ábrelo en YouTube o prueba otro enlace.';
   useEffect(() => {
     if (!videoVisible) return undefined;
     const onKeyDown = (event) => {
@@ -170,20 +209,21 @@ export default function YouTubePlayer({
   }, [videoVisible, onVideoVisibility]);
   return (
     <>
-      {stalled && !videoVisible && (
-        <button
-          type="button"
-          className="youtube-reveal"
-          onClick={() => {
-            onVideoVisibility(true);
-            setStalled(false);
-            setAttempt((value) => value + 1);
-          }}
-        >
-          Mostrar video para intentar reproducir
-        </button>
-      )}
       <div className="youtube-source-actions">
+        {issueText && <span className="youtube-source-status" role="status">{issueText}</span>}
+        {retryable && (
+          <button
+            type="button"
+            className="youtube-reveal"
+            onClick={() => {
+              onVideoVisibility(true);
+              setIssue(null);
+              setAttempt((value) => value + 1);
+            }}
+          >
+            Reintentar
+          </button>
+        )}
         <button
           type="button"
           className="youtube-video-toggle"

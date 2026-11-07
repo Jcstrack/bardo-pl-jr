@@ -20,7 +20,7 @@ export default function PlayerWindowHeader({
       onPointerCancel={onDragEnd}
     >
       <div className="drag-brand">
-        <span className="live-dot" /> SONORA PLAYER
+        <span className="live-dot" /> BARDO POLITANENSE
       </div>
       <div className="window-actions">
         <span className="drag-hint" aria-hidden="true">

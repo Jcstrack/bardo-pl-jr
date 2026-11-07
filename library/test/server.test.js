@@ -63,6 +63,14 @@ test('biblioteca persistente, dos editores, archivos y permisos', async () => {
     const friendSession = await fetch(`${base}/api/library/session`, { method: 'POST', headers: { Authorization: `Bearer ${friendToken}` } })
     assert.equal((await friendSession.json()).role, 'friend')
     assert.equal((await sync({ albums: { upsert: [{ id: 'album-three', name: 'Amigo' }] } }, friendToken)).status, 200)
+    const friendDelete = await fetch(`${base}/api/library/albums/album-three`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${friendToken}` },
+    })
+    assert.equal(friendDelete.status, 200)
+    assert.equal((await friendDelete.json()).albums.some((album) => album.id === 'album-three'), false)
+    assert.equal((await get()).albums.some((album) => album.id === 'album-three'), false)
+    assert.equal((await get()).tracks.length, 2)
     const sqlite = new DatabaseSync(path.join(directory, 'library.sqlite'))
     assert.equal(sqlite.prepare('SELECT COUNT(*) AS total FROM tracks').get().total, 2)
     sqlite.close()
@@ -75,7 +83,7 @@ test('biblioteca persistente, dos editores, archivos y permisos', async () => {
     assert.equal(saved.tracks.length, 2)
     assert.equal(saved.tracks.find((track) => track.id === 'track-two').playStart, 12)
     assert.equal(saved.tracks.find((track) => track.id === 'track-one').playNext, 35)
-    assert.equal(saved.revision, 3)
+    assert.equal(saved.revision, 4)
   } finally {
     if (server) await new Promise((resolve) => server.close(resolve))
     await rm(directory, { recursive: true, force: true })
@@ -160,6 +168,71 @@ test('recupera los ID de YouTube perdidos en SQLite y los guarda en canciones nu
     const persisted = openRepository(path.join(directory, 'library.sqlite'))
     assert.equal(persisted.load().tracks[0].videoId, 'wtX_lGSuD3M')
     persisted.close()
+  } finally {
+    if (server) await new Promise((resolve) => server.close(resolve))
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
+test('invitaciones individuales: permisos, cambios, revocación y migración', async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'bardo-invites-test-'))
+  const keyFile = path.join(directory, 'key')
+  const key = 'd'.repeat(64)
+  const legacyToken = 'e'.repeat(64)
+  await writeFile(keyFile, key)
+  await writeFile(path.join(directory, 'friend-invitation.json'), JSON.stringify({ token: legacyToken }))
+  process.env.LIBRARY_DATA_DIR = directory
+  process.env.BARDO_PUBLIC_URL = 'https://bardo-example.trycloudflare.com/'
+  let server
+  try {
+    const { startServer } = await import(`../src/server.js?invites=${Date.now()}`)
+    server = await startServer({ port: 0, editorKeyFile: keyFile })
+    const base = `http://127.0.0.1:${server.address().port}`
+    const owner = { Authorization: `Bearer ${key}` }
+    const list = () => fetch(`${base}/api/library/invites`, { headers: owner }).then((res) => res.json())
+    assert.equal((await list()).invitations.length, 1)
+    assert.equal((await fetch(`${base}/api/library/session`, { method: 'POST', headers: { Authorization: `Bearer ${legacyToken}` } })).status, 200)
+
+    const created = await fetch(`${base}/api/library/invites`, {
+      method: 'POST',
+      headers: { ...owner, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ label: 'Solo escucha', expiresAt: new Date(Date.now() + 86400000).toISOString(), permissions: { add: false, edit: false, delete: false } }),
+    })
+    assert.equal(created.status, 201)
+    const invitation = (await created.json()).invitation
+    assert.equal((await list()).invitations.length, 2)
+    const friendKey = invitation.url.split('#invite=')[1]
+    assert.equal((await fetch(`${base}/api/library/session`, { method: 'POST', headers: { Authorization: `Bearer ${friendKey}` } })).status, 200)
+    assert.equal((await fetch(`${base}/api/library`, { headers: { Authorization: `Bearer ${friendKey}` } })).status, 200)
+    const sync = () => fetch(`${base}/api/library/sync`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${friendKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ changes: { albums: { upsert: [{ id: 'test-album', name: 'Prueba' }] } } }),
+    })
+    assert.equal((await sync()).status, 403)
+
+    const updated = await fetch(`${base}/api/library/invites/${invitation.id}`, {
+      method: 'PATCH',
+      headers: { ...owner, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ label: 'Puede agregar', permissions: { add: true } }),
+    })
+    assert.equal(updated.status, 200)
+    assert.equal((await updated.json()).invitation.permissions.edit, false)
+    assert.equal((await sync()).status, 200)
+    assert.equal((await fetch(`${base}/api/library/albums/test-album`, { method: 'DELETE', headers: { Authorization: `Bearer ${friendKey}` } })).status, 403)
+    assert.equal((await fetch(`${base}/api/library/invites`, { headers: { Authorization: `Bearer ${friendKey}` } })).status, 403)
+
+    assert.equal((await fetch(`${base}/api/library/invites/${invitation.id}`, { method: 'DELETE', headers: owner })).status, 200)
+    assert.equal((await fetch(`${base}/api/library`, { headers: { Authorization: `Bearer ${friendKey}` } })).status, 401)
+    assert.equal((await list()).invitations.find((item) => item.id === invitation.id).revokedAt !== null, true)
+    await new Promise((resolve) => server.close(resolve))
+    server = null
+
+    const restarted = await import(`../src/server.js?invites-restart=${Date.now()}`)
+    server = await restarted.startServer({ port: 0, editorKeyFile: keyFile })
+    const nextBase = `http://127.0.0.1:${server.address().port}`
+    assert.equal((await fetch(`${nextBase}/api/library/invites`, { headers: owner }).then((res) => res.json())).invitations.length, 2)
+    assert.equal((await fetch(`${nextBase}/api/library`, { headers: { Authorization: `Bearer ${friendKey}` } })).status, 401)
   } finally {
     if (server) await new Promise((resolve) => server.close(resolve))
     await rm(directory, { recursive: true, force: true })

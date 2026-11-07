@@ -71,7 +71,6 @@ export default function PlaybackSource({
           }
         >
           <YouTubePlayer
-            key={active.id + videoId}
             videoId={videoId}
             volume={volume}
             maximized={maximized}
@@ -123,15 +122,6 @@ export default function PlaybackSource({
                 youtubeRef.current?.pauseVideo();
               }
             }}
-            onError={(reason) =>
-              onMessage(
-                reason === 'timeout' || reason === 'load'
-                  ? 'YouTube no terminó de cargar en este navegador. Muestra el video para reintentarlo o ábrelo en YouTube.'
-                  : reason === 'autoplay'
-                    ? 'El navegador bloqueó la reproducción automática. Pulsa Reproducir otra vez o muestra el video.'
-                    : 'Este video no permite reproducirse aquí. Prueba otro enlace o ábrelo en YouTube.',
-              )
-            }
           />
         </Suspense>
       )}

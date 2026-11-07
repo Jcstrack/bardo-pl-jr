@@ -51,6 +51,7 @@
   font-size: 19px;
   font-weight: 750;
   letter-spacing: -0.06em;
+  white-space: nowrap;
 }
 .brand-symbol {
   display: grid;
@@ -58,9 +59,12 @@
   width: 28px;
   height: 28px;
   border-radius: 7px;
-  background: #aa8cdf;
-  color: #17131f;
-  font-size: 19px;
+  overflow: hidden;
+}
+.brand-symbol img {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 .brand-dot {
   color: #aa8cdf;
@@ -379,19 +383,18 @@
   grid-template-rows: minmax(0, 1fr);
 }
 .player-maximized .player-content.player-content--video {
-  grid-template-rows: max-content max-content;
-  align-content: start;
-  overflow-y: auto;
+  grid-template-rows: minmax(0, 1fr) auto;
+  padding-block: clamp(14px, 2vh, 24px);
+  overflow: hidden;
 }
 .player-maximized .player-content.player-content--video:has(.playback-area:last-child) {
-  grid-template-rows: max-content;
+  grid-template-rows: minmax(0, 1fr);
 }
 .player-maximized .player-content.player-content--video .library-area {
-  position: sticky;
-  top: 0;
-  align-self: start;
-  height: calc(100svh - 125px);
-  max-height: 760px;
+  position: static;
+  align-self: stretch;
+  height: auto;
+  max-height: none;
 }
 .player-maximized .playback-area {
   grid-area: playback;
@@ -407,13 +410,9 @@
   background: radial-gradient(circle at 18% 8%, #362b455c, transparent 52%), #20212a;
 }
 .player-maximized .playback-area--video {
-  justify-content: flex-start;
-  overflow: visible;
-  padding-top: clamp(18px, 2vw, 30px);
-  padding-bottom: clamp(18px, 2vw, 30px);
-}
-.player-maximized .playback-area--video .timeline-track {
-  margin-top: 22px;
+  justify-content: center;
+  overflow: hidden;
+  padding: clamp(14px, 1.8vw, 26px) clamp(18px, 2.5vw, 36px);
 }
 .player-maximized .player-content:has(.services-area) .playback-area {
   border-bottom: 0;
@@ -502,12 +501,49 @@
 .player-maximized .track-heading p {
   font-size: 13px;
 }
+.player-maximized .playback-area--video .album-art {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+}
+.player-maximized .playback-area--video .album-art svg {
+  width: 17px;
+  height: 17px;
+}
+.player-maximized .playback-area--video .track-heading h2 {
+  font-size: clamp(15px, 1.2vw, 18px);
+  line-height: 1.15;
+}
+.player-maximized .playback-area--video .track-heading p {
+  font-size: 11px;
+}
 .player-maximized .playback-area .timeline-track {
   margin-top: clamp(40px, 6vh, 72px);
+}
+.player-maximized .playback-area--video .timeline-track {
+  margin-top: 20px;
 }
 .player-maximized .transport {
   margin-top: 24px;
   gap: 15px;
+}
+.player-maximized .playback-area--video .transport {
+  margin-top: 12px;
+}
+.player-maximized .player-content--video .services-area {
+  padding: 0 clamp(18px, 2.5vw, 36px) 16px;
+}
+.player-maximized .player-content--video .services-area .discord-option-toggle {
+  min-height: 80px;
+  padding: 12px;
+}
+.player-maximized .player-content--video .services-area .discord-option-icon {
+  width: 32px;
+  height: 32px;
+}
+.player-maximized .player-content--video .services-area .discord-option-icon svg {
+  width: 17px;
+  height: 17px;
 }
 .player-maximized .library-area {
   grid-area: library;
@@ -628,9 +664,58 @@
   display: flex;
   align-items: center;
   justify-content: flex-end;
+  flex-wrap: wrap;
   gap: 12px;
   min-height: 34px;
   margin-top: 12px;
+}
+.youtube-source-status {
+  order: 2;
+  flex: 1 0 100%;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid #584960;
+  border-radius: 8px;
+  background: #302737;
+  color: #d9bed8;
+  font-size: 11px;
+  line-height: 1.4;
+}
+.player-maximized .playback-area:has(.youtube-source-status) {
+  overflow: hidden;
+  padding-block: clamp(16px, 2vw, 28px);
+}
+.player-maximized .playback-area:not(.playback-area--video):has(.youtube-source-status) .album-art {
+  width: 48px;
+  height: 48px;
+  border-radius: 11px;
+}
+.player-maximized .playback-area:not(.playback-area--video):has(.youtube-source-status) .track-heading h2 {
+  font-size: clamp(16px, 1.3vw, 20px);
+}
+.player-maximized .playback-area:has(.youtube-source-status) .timeline-track {
+  margin-top: 22px;
+}
+.player-maximized .playback-area:has(.youtube-source-status) .transport {
+  margin-top: 14px;
+}
+.player-maximized .player-content:has(.youtube-source-status) .services-area {
+  padding-bottom: 16px;
+}
+.player-maximized .player-content:has(.youtube-source-status) .services-area .discord-option-toggle {
+  min-height: 80px;
+  padding: 12px;
+}
+.player-maximized .playback-area--video .now-playing {
+  align-self: stretch;
+  padding-right: 215px;
+}
+.player-maximized .playback-area--video .youtube-source-actions:not(:has(.youtube-source-status)) {
+  align-self: stretch;
+  position: relative;
+  z-index: 1;
+  margin-top: -34px;
+  margin-bottom: 9px;
 }
 .player-expanded .youtube-source-actions {
   min-height: 30px;
@@ -663,7 +748,7 @@
   aspect-ratio: 16 / 9;
   min-height: 200px;
   height: auto;
-  margin-top: 12px;
+  margin-top: 8px;
   border: 1px solid #51475f;
   background: #111;
 }
@@ -678,8 +763,12 @@
 }
 .player-maximized .youtube-frame--inline {
   align-self: center;
-  width: min(100%, 430px);
-  max-height: 340px;
+  width: min(100%, 100svh);
+  min-height: 0;
+  max-height: none;
+}
+.player-maximized .player-content:has(.services-area) .youtube-frame--inline {
+  width: min(100%, 73svh);
 }
 .youtube-collapsed {
   display: flex;
@@ -2307,6 +2396,49 @@ input[type='range']:disabled {
 .delete-album:hover {
   background: #392a31;
 }
+.album-delete-confirm {
+  margin-top: 17px;
+  padding: 14px;
+  border: 1px solid #79565f;
+  border-radius: 10px;
+  background: #2b232c;
+}
+.album-delete-confirm p {
+  margin: 0 0 12px;
+  color: #e8d4dd;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.album-delete-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.album-delete-actions button {
+  min-height: 36px;
+  padding: 8px 12px;
+  border: 1px solid #5d5966;
+  border-radius: 8px;
+  background: #30303a;
+  color: #eeeaf3;
+  cursor: pointer;
+  font-size: 11px;
+}
+.album-delete-actions .delete-album {
+  width: auto;
+  margin: 0;
+  border-color: #986273;
+  color: #ffd5df;
+}
+.album-delete-actions button:disabled {
+  opacity: .6;
+  cursor: wait;
+}
+.album-delete-actions button:focus-visible,
+.delete-album:focus-visible {
+  outline: 2px solid #b49ae6;
+  outline-offset: 2px;
+}
 .form-error {
   margin: 0;
   color: #e7adb3;
@@ -2613,7 +2745,7 @@ button svg {
   left: 0;
   top: 0;
   z-index: -1;
-  width: 256px;
+  width: 200px;
   height: 200px;
   margin-top: 0;
   border-radius: 0;
@@ -2622,7 +2754,7 @@ button svg {
   pointer-events: none;
 }
 .youtube-frame--tiny iframe {
-  width: 256px !important;
+  width: 200px !important;
   height: 200px !important;
   transform: scale(0) !important;
   transform-origin: top left;
@@ -2633,10 +2765,9 @@ button svg {
   font-size: 11px;
 }
 .youtube-reveal {
-  display: block;
-  width: 100%;
-  margin: 8px 0 0;
-  padding: 9px 11px;
+  flex: none;
+  min-height: 32px;
+  padding: 7px 10px;
   border: 1px solid #6d5a85;
   border-radius: 8px;
   background: #2b2535;
@@ -2644,8 +2775,252 @@ button svg {
   font-size: 11px;
   cursor: pointer;
 }
+.youtube-open {
+  white-space: nowrap;
+}
+@media (max-width: 650px) {
+  .player-maximized .playback-area--video .now-playing {
+    padding-right: 0;
+  }
+  .player-maximized .playback-area--video .youtube-source-actions:not(:has(.youtube-source-status)) {
+    margin-top: 6px;
+  }
+}
 .youtube-video-actions + .youtube-frame--tiny {
   margin-top: 0;
+}
+
+.service-modal--invites {
+  width: min(760px, 100%);
+}
+
+.invite-manager {
+  min-width: 0;
+}
+
+.invite-tabs {
+  display: flex;
+  gap: 7px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid #45404e;
+}
+
+.invite-tabs button {
+  padding: 10px 12px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: #aaa2b5;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.invite-tabs button[aria-selected='true'] {
+  border-bottom-color: #bc9dea;
+  color: #e7d6ff;
+}
+
+.invite-tabs span {
+  margin-left: 4px;
+  color: #c9b3ed;
+}
+
+.invite-form,
+.invite-edit {
+  display: grid;
+  gap: 12px;
+}
+
+.invite-form label,
+.invite-edit label {
+  display: grid;
+  gap: 6px;
+  color: #c5bdcf;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.invite-form input,
+.invite-form select,
+.invite-edit input {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 38px;
+  padding: 8px 10px;
+  border: 1px solid #504a5b;
+  border-radius: 9px;
+  background: #1d1c25;
+  color: #f3ecf8;
+  color-scheme: dark;
+  font: inherit;
+  font-size: 12px;
+}
+
+.invite-form input:focus-visible,
+.invite-form select:focus-visible,
+.invite-edit input:focus-visible,
+.invite-manager button:focus-visible {
+  outline: 2px solid #ba98ee;
+  outline-offset: 2px;
+}
+
+.invite-field-title {
+  color: #c5bdcf;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.invite-permissions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.invite-permissions label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid #504a5b;
+  border-radius: 9px;
+  background: #292630;
+  color: #bbb2c6;
+  cursor: pointer;
+}
+
+.invite-permissions label.is-selected {
+  border-color: #9f82c8;
+  background: #493858;
+  color: #f5eaff;
+}
+
+.invite-permissions input {
+  width: 13px;
+  min-height: 13px;
+  margin: 0;
+  padding: 0;
+  accent-color: #b99aea;
+}
+
+.invite-list {
+  display: grid;
+  gap: 9px;
+  max-height: min(56svh, 560px);
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.invite-row {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid #484250;
+  border-radius: 12px;
+  background: #282630;
+}
+
+.invite-row-summary {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.invite-row-summary > div {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.invite-row-summary strong {
+  overflow: hidden;
+  color: #f3eff8;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.invite-row-summary small,
+.invite-row-permissions,
+.invite-edit small {
+  color: #aaa2b5;
+  font-size: 10px;
+}
+
+.invite-status {
+  flex: none;
+  padding: 4px 7px;
+  border-radius: 6px;
+  background: #44333e;
+  color: #edb6c4;
+  font-size: 10px;
+}
+
+.invite-status.is-active {
+  background: #304a41;
+  color: #a6e4c2;
+}
+
+.invite-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.invite-row-actions button {
+  min-height: 30px;
+  padding: 5px 9px;
+  border: 1px solid #655879;
+  border-radius: 7px;
+  background: #352d41;
+  color: #e2cef9;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.invite-row-actions button.invite-revoke {
+  margin-left: auto;
+  border-color: #79565c;
+  background: transparent;
+  color: #efb7bf;
+}
+
+.invite-row-actions button:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+}
+
+.invite-edit {
+  padding-top: 12px;
+  border-top: 1px solid #484250;
+}
+
+.invite-manual-url {
+  box-sizing: border-box;
+  width: 100%;
+  margin-top: 10px;
+  padding: 9px;
+  border: 1px solid #655879;
+  border-radius: 8px;
+  background: #1d1c25;
+  color: #f3ecf8;
+  font-size: 11px;
+}
+
+@media (max-width: 560px) {
+  .invite-tabs button {
+    padding-inline: 8px;
+    font-size: 11px;
+  }
+  .invite-row-actions button.invite-revoke {
+    margin-left: 0;
+  }
 }
 
 /* El panel completo NO se desmonta en modo minimizado.
@@ -2663,7 +3038,7 @@ button svg {
   opacity: 0.01;
   pointer-events: none;
 }
-@media (max-width: 1100px), (max-height: 700px) {
+@media (max-width: 960px), (max-height: 560px) {
   .player-maximized .player-content {
     display: block;
     overflow-y: auto;

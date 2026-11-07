@@ -26,11 +26,17 @@ export default function PlaybackTimeline({
   const scrubPosition = scrub?.activeId === active?.id ? scrub.position : null;
   // El punto principal sigue la posición solicitada. La marca secundaria
   // conserva la posición que el bot todavía está terminando de emitir.
-  const shownElapsed = scrubPosition ?? pendingSeek ?? elapsed;
+  const shownElapsed = Math.max(playStart ?? 0, scrubPosition ?? pendingSeek ?? elapsed);
   const playFinish = playNext ?? playEnd;
   const positionAt = (clientX) => {
     const rect = timelineRef.current?.getBoundingClientRect();
-    return rect?.width ? clamp((clientX - rect.left) / rect.width, 0, 1) * duration : shownElapsed;
+    return rect?.width
+      ? clamp(
+          clamp((clientX - rect.left) / rect.width, 0, 1) * duration,
+          Math.min(playStart ?? 0, duration),
+          duration,
+        )
+      : shownElapsed;
   };
 
   return (
@@ -63,7 +69,7 @@ export default function PlaybackTimeline({
             )}
             <input
               aria-label="Posición de la canción"
-              title="Flechas: 1 segundo · Mayús + flechas: 10 segundos · Inicio/Fin: extremos"
+              title="Flechas: 1 segundo · Mayús + flechas: 10 segundos · Inicio/Fin: límites permitidos"
               type="range"
               min="0"
               max={duration || 1}
@@ -135,9 +141,13 @@ export default function PlaybackTimeline({
                       onPointerMove={(event) => {
                         if (markerDragRef.current !== kind) return;
                         const rect = timelineRef.current.getBoundingClientRect();
-                        onMove(kind, ((event.clientX - rect.left) / rect.width) * duration);
+                        onMove(kind, ((event.clientX - rect.left) / rect.width) * duration, false);
                       }}
-                      onPointerUp={() => {
+                      onPointerUp={(event) => {
+                        if (markerDragRef.current === 'playStart') {
+                          const rect = timelineRef.current.getBoundingClientRect();
+                          onMove(kind, ((event.clientX - rect.left) / rect.width) * duration);
+                        }
                         markerDragRef.current = null;
                       }}
                       onPointerCancel={() => {

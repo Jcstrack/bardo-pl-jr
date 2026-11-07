@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import Icon from '../../../components/ui/Icon.jsx';
 import AlbumManagerPicker from './AlbumManagerPicker.jsx';
 import AlbumOrderList from './AlbumOrderList.jsx';
@@ -30,11 +30,14 @@ export default function MusicModal({
   onCreateAlbum,
   onRenameAlbum,
   onDeleteAlbum,
+  deletingAlbum,
   onAddLink,
   onSaveEdit,
   onUploadClick,
   onShareTab,
 }) {
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  useEffect(() => setConfirmDelete(false), [modal, selectedAlbum?.id]);
   useEffect(() => {
     if (!modal) return;
     const closeEscape = (event) => {
@@ -153,9 +156,25 @@ export default function MusicModal({
                   onReorder={onReorderTrack}
                   onEditTrack={onEditTrack}
                 />
-                <button type="button" className="delete-album" onClick={onDeleteAlbum}>
-                  Eliminar álbum
-                </button>
+                {confirmDelete ? (
+                  <div className="album-delete-confirm" role="group" aria-label="Confirmar eliminación del álbum">
+                    <p>
+                      ¿Eliminar «{selectedAlbum?.name}»? Las canciones que también estén en otros álbumes se conservarán.
+                    </p>
+                    <div className="album-delete-actions">
+                      <button type="button" onClick={() => setConfirmDelete(false)} disabled={deletingAlbum}>
+                        Cancelar
+                      </button>
+                      <button type="button" className="delete-album" onClick={onDeleteAlbum} disabled={deletingAlbum}>
+                        {deletingAlbum ? 'Eliminando…' : 'Sí, eliminar álbum'}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button type="button" className="delete-album" onClick={() => setConfirmDelete(true)}>
+                    Eliminar álbum
+                  </button>
+                )}
               </>
             )}
           </>

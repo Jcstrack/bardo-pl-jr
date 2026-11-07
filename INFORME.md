@@ -1,8 +1,8 @@
-# Informe técnico: Bardo Politanense JR
+# Informe técnico: Bardo Politanense
 
 ## Función y estructura
 
-Bardo es un reproductor flotante en React: álbumes, lista reordenable, enlaces y archivos de audio, controles de reproducción, repetición, volumen y captura de pestaña. La extensión opcional de Brave puede enviar controles multimedia a una pestaña externa cuando esta los expone. El bot de Discord recibe audio capturado por el navegador y lo reproduce en un canal de voz.
+Bardo es un reproductor flotante en React: álbumes, lista reordenable, enlaces y archivos de audio, controles de reproducción, repetición, volumen y captura de pestaña. La extensión opcional para Brave, Opera GX y Opera puede enviar controles multimedia a una pestaña externa cuando esta los expone. El bot de Discord recibe audio capturado por el navegador y lo reproduce en un canal de voz.
 
 ```mermaid
 flowchart LR
@@ -37,7 +37,7 @@ El enlace es una credencial transferible: **no puede garantizarse que solo lo us
 
 `/conectar` une al bot al canal de voz y entrega un código temporal para emparejar una sesión del reproductor. El navegador envía audio WebM Opus por WebSocket; FFmpeg lo convierte a paquetes Opus de 20 ms. Se conserva el búfer inicial de **1200 ms** confirmado como fluido. La barra de progreso se muestra con una demora aproximada y espera el estado de reproducción que informa el bot. Esta presentación visual no retrasa el audio ni mide la latencia final de cada oyente en Discord.
 
-La captura `getDisplayMedia` requiere un origen seguro. El enlace HTTPS de Cloudflare lo proporciona, y el permiso de elegir pestaña/audio es el diálogo normal del navegador. La extensión de Brave no es necesaria para el túnel ni para reproducir archivos guardados; sirve para controlar multimedia de otra pestaña. Se entrega como ZIP descomprimible en `Bardo-Extension-Instalador/Bardo-Extension-0.2.3.zip`, con instrucciones para Brave. Reconoce `localhost` y `*.trycloudflare.com`.
+La captura `getDisplayMedia` requiere un origen seguro. El enlace HTTPS de Cloudflare lo proporciona, y el permiso de elegir pestaña/audio es el diálogo normal del navegador. La extensión no es necesaria para el túnel ni para reproducir archivos guardados; sirve para controlar multimedia de otra pestaña. Se entrega en `Bardo-Extension-Instalador/Instalar-Bardo-Extension.exe`. El instalador muestra Brave, Opera GX y Opera en ese orden; crea un perfil propio y un acceso directo que carga la extensión al iniciar el navegador, sin Modo desarrollador. Reconoce `localhost` y `*.trycloudflare.com`. La carga automática se probó en los tres navegadores con perfiles temporales.
 
 Las 39 canciones migradas actualmente son enlaces de YouTube. Al migrar a SQLite se había omitido `videoId`; el frontend generaba un iframe vacío. El backend ya reconstruye y persiste los 39 ID desde sus URL, y el frontend puede derivarlos al reproducir. El iframe conserva un área de 256 × 200 píxeles para la API de YouTube y se oculta visualmente con `scale(0)`; Play antes de que se cargue queda pendiente. Después de 15 segundos sin respuesta, aparece una opción para mostrar el video y reintentar, además del enlace de origen. La API de YouTube ya no permite forzar una calidad de video concreta; la plataforma la selecciona automáticamente. Los enlaces siguen dependiendo de YouTube; para reproducción independiente del servicio, hay que subir archivos de audio autorizados a `uploads/`.
 

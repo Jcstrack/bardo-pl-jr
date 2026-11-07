@@ -1,22 +1,11 @@
 import { useEffect, useState } from 'react';
 import Icon from '../../../components/ui/Icon.jsx';
-import { createFriendInvite } from '../services/sharedLibrary.js';
 import ServiceModal from '../../../components/ui/ServiceModal.jsx';
+import InviteManager from './InviteManager.jsx';
 
-async function copyText(value, input) {
-  if (navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(value);
-    return true;
-  }
-  input?.select();
-  return document.execCommand('copy');
-}
-
-export default function LibraryShareOption({ editorKey, accessRole, maximized = false }) {
+export default function LibraryShareOption({ editorKey, accessRole, accessPermissions, maximized = false }) {
   const [open, setOpen] = useState(false);
   const [publicUrl, setPublicUrl] = useState('');
-  const [notice, setNotice] = useState('');
-  const [invitation, setInvitation] = useState('');
 
   useEffect(() => {
     let active = true;
@@ -35,76 +24,14 @@ export default function LibraryShareOption({ editorKey, accessRole, maximized = 
     };
   }, []);
 
-  useEffect(() => {
-    setInvitation('');
-  }, [publicUrl]);
-
-  const copy = async (value, label, id) => {
-    try {
-      const copied = await copyText(value, document.getElementById(id));
-      setNotice(copied ? `${label} copiado.` : 'Selecciona la dirección y cópiala manualmente.');
-    } catch {
-      setNotice('Selecciona la dirección y cópiala manualmente.');
-    }
-  };
-
   const details = open && (
     <div className="discord-option-details" id="library-share-details">
       {accessRole === 'owner' ? (
-        <>
-          <strong>Invita a tu amigo</strong>
-          <p>
-            Al abrir el enlace completo entrará a esta página con todos los álbumes y podrá escuchar
-            y agregar música.
-          </p>
-          {!publicUrl && (
-            <p role="status">
-              La conexión externa no está disponible. Inicia el túnel para generar la invitación.
-            </p>
-          )}
-          <button
-            type="button"
-            className="generate-invite-button"
-            disabled={!publicUrl}
-            onClick={async () => {
-              try {
-                const result = await createFriendInvite(editorKey);
-                setInvitation(result.url);
-                setNotice('Invitación lista. Compártela solo con tu amigo.');
-              } catch (error) {
-                setNotice(error.message);
-              }
-            }}
-          >
-            Generar invitación
-          </button>
-          {invitation && (
-            <div className="share-link-row">
-              <input
-                id="bardo-editor-url"
-                aria-label="Invitación para editar"
-                readOnly
-                value={invitation}
-                onFocus={(event) => event.target.select()}
-              />
-              <button
-                type="button"
-                onClick={() => copy(invitation, 'Invitación', 'bardo-editor-url')}
-              >
-                Copiar
-              </button>
-            </div>
-          )}
-        </>
+        <InviteManager editorKey={editorKey} publicUrl={publicUrl} />
       ) : accessRole === 'friend' ? (
-        <p>Ya entraste con tu invitación. Puedes escuchar y agregar canciones.</p>
+        <p>Tu invitación permite escuchar{accessPermissions?.add ? ', agregar' : ''}{accessPermissions?.edit ? ', editar' : ''}{accessPermissions?.delete ? ' y eliminar' : ''} canciones.</p>
       ) : (
         <p>Abre el enlace completo que te enviaron para entrar directamente a la biblioteca.</p>
-      )}
-      {notice && (
-        <p role="status" className="share-copy-notice">
-          {notice}
-        </p>
       )}
     </div>
   );
@@ -131,6 +58,7 @@ export default function LibraryShareOption({ editorKey, accessRole, maximized = 
       {maximized && open ? (
         <ServiceModal
           id="library-share-service"
+          className="service-modal--invites"
           title="Compartir biblioteca"
           description={
             publicUrl ? 'Genera un enlace de invitación' : 'Conexión externa no disponible'
