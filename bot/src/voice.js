@@ -112,6 +112,7 @@ export class VoiceBridge {
       player,
       code: null,
       codeExpires: 0,
+      resumeToken: null,
       socket: null,
       activity: false,
       transcoder: null,
@@ -153,6 +154,17 @@ export class VoiceBridge {
     if (!this.status.voiceConnected || !code || code !== session.code || Date.now() > session.codeExpires) return false;
     session.code = null;
     session.codeExpires = 0;
+    session.resumeToken = randomBytes(32).toString('base64url');
+    if (session.socket && session.socket !== socket) session.socket.close(1000, 'Nueva conexión');
+    this.stopAudio(session);
+    session.socket = socket;
+    session.activity = false;
+    return true;
+  }
+
+  acceptResumeToken(token, socket) {
+    const session = this.session;
+    if (!session?.resumeToken || !token || token !== session.resumeToken) return false;
     if (session.socket && session.socket !== socket) session.socket.close(1000, 'Nueva conexión');
     this.stopAudio(session);
     session.socket = socket;

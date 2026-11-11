@@ -9,6 +9,7 @@ export default function PlaybackTimeline({
   pendingSeek,
   discordDelayed,
   discordPlaying,
+  repeat,
   loopStart,
   loopEnd,
   playStart,
@@ -49,7 +50,7 @@ export default function PlaybackTimeline({
       ) : (
         <>
           <div className="timeline-track" ref={timelineRef}>
-            {(loopStart !== null || loopEnd !== null) && duration > 0 && (
+            {repeat && (loopStart !== null || loopEnd !== null) && duration > 0 && (
               <div
                 className="loop-region"
                 style={{
@@ -118,8 +119,12 @@ export default function PlaybackTimeline({
             )}
             {duration > 0 &&
               [
-                ['loopStart', loopStart, 'Inicio de repetición', onSetLoopMarker],
-                ['loopEnd', loopEnd, 'Fin de repetición', onSetLoopMarker],
+                ...(repeat
+                  ? [
+                      ['loopStart', loopStart, 'Inicio de repetición', onSetLoopMarker],
+                      ['loopEnd', loopEnd, 'Fin de repetición', onSetLoopMarker],
+                    ]
+                  : []),
                 ['playStart', playStart, 'Inicio de reproducción', onSetPlayMarker],
                 ['playEnd', playEnd, 'Pausar reproducción', onSetPlayMarker],
                 ['playNext', playNext, 'Pasar a la siguiente canción', onSetPlayMarker],

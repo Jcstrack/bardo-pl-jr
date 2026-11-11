@@ -18,21 +18,23 @@ export default function DiscordBotOption({ stream, maximized = false }) {
   const status = useBotStatus(true);
   const previousPhase = useRef(stream.phase);
   useEffect(() => {
-    if (maximized && previousPhase.current === 'connecting' && stream.phase === 'on') setOpen(false);
+    if (maximized && previousPhase.current === 'connecting' && stream.phase === 'on')
+      setOpen(false);
     previousPhase.current = stream.phase;
   }, [maximized, stream.phase]);
   const modeActive = stream.phase === 'on' || stream.phase === 'connecting';
+  const pairingSaved = stream.canResume || stream.phase === 'restoring';
   const label = status.streaming
     ? 'Reproduciendo en Discord'
     : status.paired && !status.voiceConnected
       ? 'Vinculado · fuera de voz'
       : status.transportConnected
         ? 'Conectado · sin audio'
-      : status.voiceConnected
-        ? 'En canal de voz'
-        : status.connected
-          ? 'En línea · fuera de voz'
-          : statusText[status.state] || 'Sin conexión';
+        : status.voiceConnected
+          ? 'En canal de voz'
+          : status.connected
+            ? 'En línea · fuera de voz'
+            : statusText[status.state] || 'Sin conexión';
 
   const details = open && (
     <div className="discord-option-details" id="discord-option-details" role="status">
@@ -50,31 +52,43 @@ export default function DiscordBotOption({ stream, maximized = false }) {
               ? 'Comprobando la conexión del bot…'
               : 'Inicia el servicio local del bot para conectar esta opción.'}
       </p>
-      <label className="discord-code-label" htmlFor="discord-code">
-        Código de /conectar
-      </label>
-      <input
-        id="discord-code"
-        className="discord-code"
-        value={code}
-        onChange={(event) =>
-          setCode(
-            event.target.value
-              .toUpperCase()
-              .replace(/[^A-F0-9]/g, '')
-              .slice(0, 12),
-          )
-        }
-        placeholder="12 caracteres"
-        autoComplete="off"
-        spellCheck="false"
-      />
+      {pairingSaved ? (
+        <p>
+          Vinculación guardada en esta pestaña. Tras recargar, vuelve a seleccionar la pestaña con
+          audio para transmitir.
+        </p>
+      ) : (
+        <>
+          <label className="discord-code-label" htmlFor="discord-code">
+            Código de /conectar
+          </label>
+          <input
+            id="discord-code"
+            className="discord-code"
+            value={code}
+            onChange={(event) =>
+              setCode(
+                event.target.value
+                  .toUpperCase()
+                  .replace(/[^A-F0-9]/g, '')
+                  .slice(0, 12),
+              )
+            }
+            placeholder="12 caracteres"
+            autoComplete="off"
+            spellCheck="false"
+          />
+        </>
+      )}
       <button
         type="button"
         className={'discord-mode-button' + (modeActive ? ' is-active' : '')}
         aria-pressed={modeActive}
         onClick={() => (modeActive ? stream.stop() : stream.start(code))}
-        disabled={!status.voiceConnected && !modeActive}
+        disabled={
+          stream.phase === 'restoring' ||
+          (!status.voiceConnected && !modeActive && !stream.canResume)
+        }
       >
         <span className="discord-mode-button-icon">
           <Icon name="broadcast" size={18} />
@@ -85,15 +99,23 @@ export default function DiscordBotOption({ stream, maximized = false }) {
             {status.streaming
               ? 'Reproduciendo en el canal de voz'
               : stream.phase === 'on'
-                ? status.voiceConnected ? 'Conexión abierta; esperando audio audible' : 'Vinculado; regresará al reproducir música'
+                ? status.voiceConnected
+                  ? 'Conexión abierta; esperando audio audible'
+                  : 'Vinculado; regresará al reproducir música'
                 : stream.phase === 'connecting'
                   ? 'Conectando…'
-                  : status.voiceConnected
-                    ? 'Transmitir audio del reproductor'
-                    : 'Primero conecta el bot con /conectar'}
+                  : stream.phase === 'restoring'
+                    ? 'Recuperando vinculación…'
+                    : stream.canResume
+                      ? 'Seleccionar pestaña y reanudar audio'
+                      : status.voiceConnected
+                        ? 'Transmitir audio del reproductor'
+                        : 'Primero conecta el bot con /conectar'}
           </small>
         </span>
-        <span className="discord-mode-button-state">{modeActive ? 'Activado' : 'Activar'}</span>
+        <span className="discord-mode-button-state">
+          {modeActive ? 'Activado' : stream.canResume ? 'Reanudar' : 'Activar'}
+        </span>
       </button>
       {stream.error && (
         <p className="discord-mode-error" role="alert">

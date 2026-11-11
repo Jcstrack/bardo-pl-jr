@@ -231,17 +231,20 @@ server.on("upgrade", (request, socket, head) => {
     ws.on("message", (message, isBinary) => {
       if (!authenticated) {
         if (isBinary) return ws.close(1008, "Código requerido");
-        let code;
+        let credentials;
         try {
-          code = JSON.parse(message.toString()).code;
+          credentials = JSON.parse(message.toString());
         } catch {
           /* Mensaje inválido. */
         }
-        if (!voice.acceptCode(code, ws))
-          return ws.close(1008, "Código inválido o caducado");
+        const accepted = credentials?.resumeToken
+          ? voice.acceptResumeToken(credentials.resumeToken, ws)
+          : voice.acceptCode(credentials?.code, ws);
+        if (!accepted)
+          return ws.close(1008, "Vinculación inválida o caducada");
         authenticated = true;
         clearTimeout(timeout);
-        ws.send(JSON.stringify({ type: "ready" }));
+        ws.send(JSON.stringify({ type: "ready", resumeToken: voice.session.resumeToken }));
         return;
       }
       if (isBinary) {

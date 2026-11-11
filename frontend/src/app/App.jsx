@@ -828,7 +828,7 @@ function App() {
       tabController.command('repeat', true);
     } else {
       tabController.command('repeat', false);
-      tabController.command('loop', { start: loopStart, end: loopEnd });
+      tabController.command('loop', { start: null, end: null });
       tabController.command('range', { start: playStart, end: playEnd });
     }
     // Los comandos se envían al cambiar la configuración, no en cada avance de tiempo.
@@ -2028,6 +2028,7 @@ function App() {
                 pendingSeek={discordTimeline.pendingTarget}
                 discordDelayed={discordStream.phase === 'on'}
                 discordPlaying={Boolean(botTimeline.streaming)}
+                repeat={repeat}
                 loopStart={loopStart}
                 loopEnd={loopEnd}
                 playStart={playStart}

@@ -21,4 +21,4 @@ Desde la raíz del proyecto, `docker compose up -d --build` inicia el frontend, 
 - `/desconectar`: termina la vinculación y sale del canal. Para transmitir otra vez hay que ejecutar `/conectar` y usar un código nuevo.
 - `/estado`: muestra si está en voz, vinculado y reproduciendo audio.
 
-Cuando la pestaña capturada permanece en silencio, Bardo detiene el envío de audio y deja de mostrar el indicador de voz. La vinculación se mantiene en memoria mientras el navegador, el bot y la conexión WebSocket sigan abiertos; reiniciar cualquiera de ellos requiere `/conectar` otra vez.
+Cuando la pestaña capturada permanece en silencio, Bardo detiene el envío de audio y deja de mostrar el indicador de voz. La vinculación queda en memoria del bot y una credencial de recuperación se guarda en `sessionStorage` de la pestaña. Recargar esa misma pestaña recupera la vinculación sin otro código; el navegador exige volver a seleccionar qué pestaña compartir para reactivar el audio. Reiniciar el bot, cerrar la pestaña o usar `/desconectar` requiere `/conectar` otra vez.

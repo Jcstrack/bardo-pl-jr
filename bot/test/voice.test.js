@@ -125,3 +125,35 @@ test('el silencio apaga la voz sin cerrar la vinculación', async () => {
   assert.equal(player.state.status, AudioPlayerStatus.Idle);
   assert.deepEqual(speaking, [false]);
 });
+
+test('una recarga recupera la vinculación sin reutilizar el código', () => {
+  const bridge = new VoiceBridge();
+  const previousSocket = { close() {} };
+  const newSocket = { close() {} };
+  bridge.session = {
+    connection: {
+      state: { status: VoiceConnectionStatus.Ready },
+      setSpeaking() {},
+      destroy() {},
+    },
+    player: { state: { status: AudioPlayerStatus.Idle } },
+    code: 'ABCDEF123456',
+    codeExpires: Date.now() + 30_000,
+    socket: null,
+  };
+
+  assert.equal(bridge.acceptCode('ABCDEF123456', previousSocket), true);
+  const token = bridge.session.resumeToken;
+  assert.match(token, /^[A-Za-z0-9_-]{43}$/);
+  bridge.removeSocket(previousSocket);
+  assert.equal(bridge.status.paired, false);
+  bridge.leaveVoice();
+  assert.equal(bridge.status.voiceConnected, false);
+  assert.equal(bridge.acceptResumeToken(token, newSocket), true);
+  assert.equal(bridge.status.paired, true);
+  assert.equal(bridge.session.socket, newSocket);
+  assert.equal(bridge.acceptCode('ABCDEF123456', previousSocket), false);
+
+  bridge.leave();
+  assert.equal(bridge.acceptResumeToken(token, previousSocket), false);
+});
