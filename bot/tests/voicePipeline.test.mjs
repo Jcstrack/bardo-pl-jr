@@ -26,7 +26,7 @@ test('un flujo WebM llega al reproductor como paquetes Opus tras el búfer inici
   };
   const bridge = new VoiceBridge();
   bridge.session = {
-    connection: { state: { status: VoiceConnectionStatus.Ready } },
+    connection: { state: { status: VoiceConnectionStatus.Ready }, setSpeaking() {} },
     player,
     code: 'ABCDEF123456',
     codeExpires: Date.now() + 30_000,
@@ -35,11 +35,12 @@ test('un flujo WebM llega al reproductor como paquetes Opus tras el búfer inici
     transcoder: null,
     bufferMs: 1200,
   };
-  const socket = { close() {} };
+  const socket = { readyState: 1, close() {}, send() {} };
   let timeoutId;
 
   try {
     assert.equal(bridge.acceptCode('ABCDEF123456', socket), true);
+    await bridge.setActivity(socket, true);
     for (let offset = 0; offset < generated.stdout.length; offset += 4096) {
       assert.equal(bridge.writeAudio(socket, generated.stdout.subarray(offset, offset + 4096)), true);
     }
@@ -51,6 +52,6 @@ test('un flujo WebM llega al reproductor como paquetes Opus tras el búfer inici
     assert.ok(bridge.status.audioChunks > 0);
   } finally {
     clearTimeout(timeoutId);
-    bridge.stopStream();
+    bridge.stopAudio();
   }
 });

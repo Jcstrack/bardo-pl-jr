@@ -13,3 +13,12 @@ El archivo `.env` guarda solo la ruta del token y está ignorado por Git. Tambi�
 ## Ejecutar
 
 Desde la raíz del proyecto, `docker compose up -d --build` inicia el frontend, la biblioteca y el bot. Abre `http://localhost:8088/`; Nginx dirige `/api/bot` al contenedor del bot. Para comprobar el estado local usa `http://localhost:8088/api/bot/status`.
+
+## Comandos de voz
+
+- `/conectar`: entra al canal donde estás y entrega un código temporal para vincular el reproductor.
+- `/salir`: sale del canal, pero conserva la vinculación mientras el reproductor siga abierto. Al volver a reproducir música, Bardo entra de nuevo al mismo canal.
+- `/desconectar`: termina la vinculación y sale del canal. Para transmitir otra vez hay que ejecutar `/conectar` y usar un código nuevo.
+- `/estado`: muestra si está en voz, vinculado y reproduciendo audio.
+
+Cuando la pestaña capturada permanece en silencio, Bardo detiene el envío de audio y deja de mostrar el indicador de voz. La vinculación se mantiene en memoria mientras el navegador, el bot y la conexión WebSocket sigan abiertos; reiniciar cualquiera de ellos requiere `/conectar` otra vez.

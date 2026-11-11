@@ -206,6 +206,7 @@ function App() {
     [activeId],
   );
   const discordStream = useDiscordStream(captureRef, activeId);
+  const { phase: discordPhase, resume: resumeDiscordStream } = discordStream;
   const botTimeline = useBotStatus(discordStream.phase === 'on', 400);
   const discordTimeline = useDiscordTimeline(
     elapsed,
@@ -242,6 +243,9 @@ function App() {
   );
   // No ligar la canción que suena al álbum seleccionado en la interfaz.
   const active = tracks.find((track) => track.id === activeId);
+  useEffect(() => {
+    if (discordPhase === 'on' && playing && activeId) resumeDiscordStream();
+  }, [activeId, discordPhase, resumeDiscordStream, playing]);
   const videoVisible = videoOpen && active?.kind === 'youtube' && view !== 'minimized';
   const mediaEnabled = view !== 'closed';
   // Siguiente/anterior siguen la lista del álbum de la canción en reproducción.

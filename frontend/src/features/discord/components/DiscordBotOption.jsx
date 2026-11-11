@@ -24,8 +24,10 @@ export default function DiscordBotOption({ stream, maximized = false }) {
   const modeActive = stream.phase === 'on' || stream.phase === 'connecting';
   const label = status.streaming
     ? 'Reproduciendo en Discord'
-    : status.transportConnected
-      ? 'Recibiendo audio'
+    : status.paired && !status.voiceConnected
+      ? 'Vinculado · fuera de voz'
+      : status.transportConnected
+        ? 'Conectado · sin audio'
       : status.voiceConnected
         ? 'En canal de voz'
         : status.connected
@@ -38,8 +40,10 @@ export default function DiscordBotOption({ stream, maximized = false }) {
       <p>
         {status.connected
           ? status.voiceConnected
-            ? `Bardo está en ${status.channelName}.${status.streaming ? ' Reproduciendo audio en Discord.' : status.transportConnected ? ` Flujo conectado: ${status.audioChunks || 0} fragmentos de audio recibidos; reproductor ${status.playerState || 'pendiente'}.` : ' Esperando el código y audio del navegador.'}`
-            : `Bardo está en línea como ${status.botName}, pero fuera de voz. Entra a un canal y ejecuta /conectar de nuevo; el código anterior deja de servir si se reinicia el bot.`
+            ? `Bardo está en ${status.channelName}.${status.streaming ? ' Reproduciendo audio en Discord.' : status.transportConnected ? ' Vinculado al reproductor y esperando audio audible.' : ' Esperando el código y audio del navegador.'}`
+            : status.paired
+              ? `Bardo está fuera de voz, pero sigue vinculado al reproductor. Al volver a reproducir música regresará al canal ${status.lastChannelName || 'anterior'} sin otro código. Usa /desconectar para cerrar la vinculación.`
+              : `Bardo está en línea como ${status.botName}, pero fuera de voz. Entra a un canal y ejecuta /conectar; el código anterior deja de servir si se reinicia el bot.`
           : status.state === 'needs-token'
             ? 'Configura la clave del bot en el servicio local para conectarlo.'
             : status.state === 'checking' || status.state === 'connecting'
@@ -81,7 +85,7 @@ export default function DiscordBotOption({ stream, maximized = false }) {
             {status.streaming
               ? 'Reproduciendo en el canal de voz'
               : stream.phase === 'on'
-                ? 'Conexión abierta; esperando audio audible'
+                ? status.voiceConnected ? 'Conexión abierta; esperando audio audible' : 'Vinculado; regresará al reproducir música'
                 : stream.phase === 'connecting'
                   ? 'Conectando…'
                   : status.voiceConnected

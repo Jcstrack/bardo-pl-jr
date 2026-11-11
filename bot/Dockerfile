@@ -15,3 +15,10 @@ USER bardo
 EXPOSE 3001
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s CMD node -e "fetch('http://127.0.0.1:3001/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 CMD ["node", "src/index.js"]
+
+FROM runtime AS test
+COPY --chown=bardo:bardo test ./test
+COPY --chown=bardo:bardo tests ./tests
+RUN node --test
+
+FROM runtime AS release

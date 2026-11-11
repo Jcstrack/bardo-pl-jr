@@ -44,7 +44,10 @@ const commands = [
     ),
   new SlashCommandBuilder()
     .setName("salir")
-    .setDescription("Desconectar a Bardo del canal de voz"),
+    .setDescription("Sacar a Bardo del canal sin perder la vinculación con el reproductor"),
+  new SlashCommandBuilder()
+    .setName("desconectar")
+    .setDescription("Cerrar la vinculación con el reproductor y salir del canal"),
   new SlashCommandBuilder()
     .setName("estado")
     .setDescription("Ver el estado de Bardo"),
@@ -60,7 +63,7 @@ async function registerCommands(guild) {
       else await guild.commands.create(command);
     }
     console.log(
-      `Comandos disponibles en ${guild.name}: /conectar, /salir, /estado.`,
+      `Comandos disponibles en ${guild.name}: /conectar, /salir, /desconectar, /estado.`,
     );
   } catch (error) {
     console.error(
@@ -85,6 +88,14 @@ client.on(Events.ShardDisconnect, () => {
 client.on(Events.Error, () => {
   connectionState = "error";
 });
+client.on(Events.VoiceStateUpdate, (previous, next) => {
+  if (next.id !== client.user?.id) return;
+  const currentChannelId = voice.session?.connection?.joinConfig.channelId;
+  if (currentChannelId && previous.channelId === currentChannelId && next.channelId !== currentChannelId) {
+    console.log(`Bardo salió del canal ${voice.session.channelName}; la vinculación sigue activa.`);
+    voice.leaveVoice();
+  }
+});
 
 client.on(Events.InteractionCreate, async (interaction) => {
   if (!interaction.isChatInputCommand() || !interaction.guild) return;
@@ -95,7 +106,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
       await interaction.reply({
         content: status.voiceConnected
           ? `Estoy en **${status.channelName}**${status.streaming ? " y transmitiendo audio desde Bardo Politanense." : ", esperando audio de Bardo Politanense."}`
-          : "Estoy en línea. Entra a un canal de voz y usa /conectar.",
+          : status.paired
+            ? "Estoy fuera del canal, pero sigo vinculado al reproductor. Volveré al reproducir música. Usa /desconectar para terminar la vinculación."
+            : "Estoy en línea. Entra a un canal de voz y usa /conectar.",
         flags: MessageFlags.Ephemeral,
       });
       return;
@@ -112,7 +125,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
         return;
       }
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-      await voice.join(channel);
+      await voice.join(channel, interaction.user.id);
       console.log(`Bardo entró al canal ${channel.name}.`);
       const code = voice.issueCode();
       await interaction.editReply(
@@ -122,21 +135,37 @@ client.on(Events.InteractionCreate, async (interaction) => {
     }
     if (interaction.commandName === "salir") {
       console.log(`Comando /salir recibido en ${interaction.guild.name}.`);
-      if (
-        !channel ||
-        channel.id !== voice.session?.connection.joinConfig.channelId
-      ) {
+      if (!voice.session || voice.session.guildId !== interaction.guildId) {
+        await interaction.reply({ content: "No estoy vinculado a este servidor.", flags: MessageFlags.Ephemeral });
+        return;
+      }
+      const currentVoiceChannelId = voice.session.connection?.joinConfig.channelId;
+      if (interaction.user.id !== voice.session.ownerUserId && (!currentVoiceChannelId || channel?.id !== currentVoiceChannelId)) {
         await interaction.reply({
-          content: "Entra al canal donde estoy antes de desconectarme.",
+          content: "Entra al canal donde estoy o pide a quien me conectó que use /salir.",
           flags: MessageFlags.Ephemeral,
         });
         return;
       }
-      voice.leave();
+      voice.leaveVoice();
       await interaction.reply({
-        content: "Cierro el laúd y salgo del canal.",
+        content: "Salí del canal, pero el reproductor sigue vinculado. Volveré cuando reproduzcas música.",
         flags: MessageFlags.Ephemeral,
       });
+      return;
+    }
+    if (interaction.commandName === "desconectar") {
+      if (!voice.session || voice.session.guildId !== interaction.guildId) {
+        await interaction.reply({ content: "No hay una vinculación activa en este servidor.", flags: MessageFlags.Ephemeral });
+        return;
+      }
+      const currentVoiceChannelId = voice.session.connection?.joinConfig.channelId;
+      if (interaction.user.id !== voice.session.ownerUserId && (!currentVoiceChannelId || channel?.id !== currentVoiceChannelId)) {
+        await interaction.reply({ content: "Solo quien me conectó o alguien en mi canal puede cerrar esta vinculación.", flags: MessageFlags.Ephemeral });
+        return;
+      }
+      voice.leave();
+      await interaction.reply({ content: "Desconecté el reproductor y salí del canal. Usa /conectar para iniciar otra sesión.", flags: MessageFlags.Ephemeral });
     }
   } catch (error) {
     console.error("Falló un comando del bot:", error.message);
@@ -215,11 +244,27 @@ server.on("upgrade", (request, socket, head) => {
         ws.send(JSON.stringify({ type: "ready" }));
         return;
       }
-      if (isBinary) voice.writeAudio(ws, message);
+      if (isBinary) {
+        voice.writeAudio(ws, message);
+        return;
+      }
+      let control;
+      try {
+        control = JSON.parse(message.toString());
+      } catch {
+        return;
+      }
+      if (control.type === "activity" && typeof control.active === "boolean") {
+        voice.setActivity(ws, control.active).catch((error) => console.error('No se pudo actualizar el audio:', error.message));
+      } else if (control.type === "resume") {
+        voice.resume(ws, control.active === true).catch((error) => console.error('No se pudo volver al canal:', error.message));
+      } else if (control.type === "ping") {
+        ws.send(JSON.stringify({ type: "pong" }));
+      }
     });
     ws.on("close", () => {
       clearTimeout(timeout);
-      if (voice.session?.socket === ws) voice.stopStream();
+      voice.removeSocket(ws);
     });
   });
 });
